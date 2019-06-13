@@ -1,0 +1,26 @@
+#!/bin/bash
+# Setup-Script zur Installation der Rootwall
+# Version 0.1
+# (c)2009 invis-server.org
+# Autor: Stefan Schäfer
+# Fragen: stefan@invis-server.org
+# License: GPLv3
+
+# Verzeichnisse anlegen & Dateien kopieren
+mkdir /etc/rootwall
+cp ./rootwall.cfg /etc/rootwall/
+cp ./rootwall_init /etc/init.d/rootwall
+ln -s /etc/init.d/rootwall /sbin/rcrootwall
+cp ./rootwall /sbin/rootwall
+
+# Rechte anpassen
+chmod 0644 /etc/rootwall/rootwall.cfg
+chown root.root /etc/rootwall/rootwall.cfg
+
+chmod 0750 /sbin/rootwall
+chown root.root /sbin/rootwall
+
+chmod 0750 /etc/init.d/rootwall
+chown root.root /etc/init.d/rootwall
+
+echo "Fertig - Passen Sie jetzt die Konfigurationsdatei /etc/rootwall/rootwall.cfg an Ihre Anforderungen an."

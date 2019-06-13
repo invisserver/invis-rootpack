@@ -1,0 +1,31 @@
+rootpack 0.12
+- Script "mkvhost" so geaendert, dass die automatisch erzeugte Dummy-Website einen Header enthält.
+- Ueberarbeitetes "allbackup" Script hinzugefuegt, es legt jetzt eine Log-Datei an.
+- Das Script "mkzone" setzt jetzt die Besitz- und Zugriffrechte auf das Zonenverzeichnis so, dass DDNS-Updates moeglich sind.
+- Das Script "spamstat" erkennt jetzt auf die email-Zustellung via Zarafa.
+rootpack 0.11
+- Neues Script "mkddnskey" hinzugefuegt
+rootpack 0.10
+- Zwei Tippfehler im Script mkvhost behoben
+- Die Scripts mkzone, mkmailaccount und mkvmailaccount koennen jetzt mit Umlaut-Domains in Punycode umgehen. (mkvhost noch nicht)
+rootpack 0.9
+- mkzone so geaendert, das fuer jede Domain individuell festgelegt werden kann, ob sie fuer Postfix als virtual- oder relay-Domain gefuehrt wird.
+- mkvmailaccount und mkmailaccount pruefen, ob sie fuer das Anlegen neuer Mailkonten einer Domain zustaendig sind (siehe oben)
+- spamstat beruecksichtigt jetzt auch Mails die per relay-Domain und dovecot lokal zugestellt werden. Damit stimmt die Statistik wieder.
+rootpack 0.8
+- Kleine Fehler im Setup behoben
+- Skeleton Verzeichnis fuer Kunden-Accounts hinzugefuegt
+rootpack 0.7
+- Neues Script: mkvmailaccount (Mit diesem Script werden virtuelle Mailaccounts unter Nutzung von Dovecot erstellt)
+- Erweiterung des rootpacks um die Moeglichkeit statt mit "virtuellen Postfix Usern" mit relay-Domains zu arbeiten.
+  Dies ermöglicht es Benutzeraccounts anzulegen, die keine Systembenutzer sind. Weiterhin werden damit Quota-Regeln
+  fuer Mailkonten moeglich. (vgl. Rootserver-Buch Kap. Dovecot & Postfix).
+- Neues Script: freeports (Es ermittelt auf openSUSE Systemen freie fuenfstellige Ports)
+rootpack 0.6
+- Neues Script: runwebalizer (webalizer Nutzung fuer alle vhosts hinzugefuegt.)
+rootpack 0.5
+- kleinere Fehler mit den Zugriffsrechten auf die DocRoot-Verzeichnisse behoben
+- Aufgrund von bisher ungeloesten Problemen mit "curlftpfs" im Datensicherungsscript allbackup  
+  wurde die Moeglichkeit einer lokalen Datensicherung hinzugefuegt. Lokal gesicherte Daten 
+  muessen manuell auf einen Datensicherungsserver uebertragen werden, sonst gewaehrt die Sicherung 
+  KEINE echte Sicherheit.

@@ -1,0 +1,211 @@
+#!/bin/bash
+# Script zum schnellen Anlegen neuer DNS-Zonen.
+# Version: 0.5
+# (C) 2010 invis-server.org
+# Author: Stefan Schäfer <stefan@invis-server.org>
+# Questions: http://forum.invis-server.org
+# License: GPLv3
+
+## Globale Variablen
+rootpackdir="/etc/rootpack"
+rootpackconfig="$rootpackdir/rootpack.cfg"
+
+# Eigene IP-Adresse ermitteln
+myip=$(ifconfig eth0|grep "inet Adr"|tr -s " " | cut -d ":" -f2 | cut -d " " -f1)
+
+## Funktionen
+usage() {
+    echo "-------------------------------------------------------------------------------------"
+    echo "Übergeben Sie diesem Script die Domain der neuen Zone und den Usernamen des Besitzers"
+    echo
+    echo "Beispiel: \$> mkzone example.com username"
+    echo "-------------------------------------------------------------------------------------"
+}
+
+# Konfigurationsparameter tauschen
+changevalues() {
+    # Arg1 = Pfad, Arg2 = Datei, Arg3 = sed String
+    cat $1/$2|sed "s%$3%g" > $1/$2.new
+    mv $1/$2.new $1/$2
+}
+
+getconfvalue() {
+    cat $rootpackconfig | grep "$1:" | cut -d ":" -f 2
+}
+
+# Templates fuer Zonenkonfiguration
+zonedeftemplate=$(getconfvalue ZoneDefTemplate)
+#echo $zonedeftemplate
+zoneconftemplate=$(getconfvalue ZoneConfTemplate)
+#echo $zoneconftemplate
+# Verzeichnis der Zonendateien
+zonedir=$(getconfvalue ZoneDir)
+#echo $zonedir
+
+# Postfix Virtual Maps abfragen
+pf_virtual=$(getconfvalue VirtualDB)
+pf_vdomain=$(getconfvalue VirtualDomainDB)
+pf_relay=$(getconfvalue RelayDB)
+
+# Bildschirm putzen
+clear
+
+# Domain angegeben?
+if [[ -z $1 || -z $2 ]]; then
+    usage
+    exit
+else
+    # Domain
+    domain=$1
+    zowner=$2
+fi
+
+# Testen, ob der Kunde/User existiert, wenn nicht -> Hinweis & Script beenden.
+if [[ -z $(getent passwd | grep "$zowner:") ]]; then
+    echo -e "Der angegebene Username: $zowner existiert nicht.\nBitte legen Sie ihn zunächst mit dem Script \"mkcustomer\" an."
+    exit
+fi
+
+# Testen, ob die Zone bereits existiert, wenn nicht -> dann anlegen.
+# Erst alle zugehoerigen Einträge aus dem cache werfen -- ist wichtig, wenn die Zone schon mal existierte
+rndc flushname $domain
+
+if [[ -n $(dig @localhost $domain +short) ]]; then
+    nameservers=($(dig @localhost $domain ns +short))
+    oldifs=$IFS
+    IFS=$'\n'
+    for nameserver in ${nameservers[*]}; do
+	#echo $nameserver
+	if [[ $myip == $(dig @localhost $nameserver +short) ]]; then
+	    echo "Die Zone $domain ist bereits angelegt."
+	    exit
+	else
+	    nozone=2
+	fi
+    done
+    IFS=$oldifs
+else
+    nozone=1
+fi
+
+# Domain übernehmen?
+if [[ $nozone == "2" ]]; then
+    echo -e "Die Domain $domain ist bereits anderweitig registriert,\nsetzen Sie dieses Script nur fort, wenn Sie berechtigt sind\ndiese zu übernehmen!\n"
+    echo -e "Zur berechtigten Übernahme der Domain müssen Sie entweder\nderen rechtmäßiger Besitzer sein, oder eine gültigen\nKK-Antrag vorliegen haben.\n"
+    # Solange Fragen bis endlich das richtige eingegeben wurde
+    until [[ $yesno =~ [j,n] ]]; do
+	read -p "Möchten Sie die Domain $domain übernehmen [j/n]: " yesno
+    done
+    
+    if [[ $yesno == "j" ]]; then
+	nozone=1
+    fi
+fi
+
+if [[ $nozone == "1" ]]; then
+
+    # Vorlage für neue Zonenkonfiguration kopieren
+    cp $zoneconftemplate /etc/named.d/zones/$domain.conf
+    
+    # Vorlage für neue Zonendefinition kopieren
+    cp $zonedeftemplate $zonedir/$domain.zone
+
+    # Zonenkonfiguration an Domain anpassen
+    path="/etc/named.d/zones"
+    file="$domain.conf"
+    string="domain.tld%$domain"
+    changevalues $path $file "$string"
+
+    string="domain.zone%$domain.zone"
+    changevalues $path $file "$string"
+    
+    # Zonendefinition an Domain anpassen
+    path="$zonedir"
+    file="$domain.zone"
+    string="domain.tld%$domain"
+    changevalues $path $file "$string"
+    
+    string="0.0.0.0%$myip"
+    changevalues $path $file "$string"
+    
+    # Zone in die include-Datei eintragen
+    echo "include \"/etc/named.d/zones/$domain.conf\";" >> /etc/named.zones.include
+    # Nameserver neu laden
+    /etc/init.d/named restart
+    
+    # Domain in die Kundendatei eintragen
+    echo -e "$domain" >> $rootpackdir/kunden/$zowner-*.info
+    # Info-Datei ins Home-Verzeichnis des Users kopieren
+    zownershome=$(getent passwd|grep "$zowner:" |cut -d ":" -f 6)
+    cp $rootpackdir/kunden/$zowner*.info $zownershome/infos/
+
+    ## Mail-Account System und Pfad zu den Maildirs ermitteln
+    mailaccsys=$(getconfvalue MailAccSys)
+    mailhome=$(getconfvalue MailHome)
+    
+    if [[ $mailaccsys == "virtual" ]]; then
+        # Domain fuer Postfix bekannt machen
+	echo -e "$domain\t$zowner" >> $pf_vdomain
+        postmap $pf_vdomain
+
+	# Role-Account postmaster bei Bedarf anlegen
+	if [[ -z $(getent passwd| grep $zowner-postmaster) ]]; then
+	    useradd -m -d $mailhome/$zowner-postmaster -k $rootpackdir/skel_mailuser -c "Postmaster $domain" -s /bin/false $zowner-postmaster
+	    # Passwort erzeugen
+	    pass=$(pwgen -cn 8 1)
+	    echo $pass | passwd --stdin $zowner-postmaster
+	    echo -e "Bitte übermitteln Sie das vergebene Passwort: \"$pass\" an den Besitzer der Domain $domain"
+	else
+	    echo -e "Das zugehörige Postmaster Benutzerkonto \"$zowner-postmaster\" existiert bereits. Es wurde nicht geändert."
+	fi
+    
+	# Mail-Adressen anlegen
+	echo -e "postmaster@$domain\t$zowner-postmaster" >> $pf_virtual
+	echo -e "abuse@$domain\t$zowner-postmaster" >> $pf_virtual
+	echo -e "webmaster@$domain\t$zowner-postmaster" >> $pf_virtual
+	postmap $pf_virtual
+
+    elif [[ $mailaccsys == "relay" ]]; then
+
+        # Domain fuer Postfix bekannt machen
+	echo -e "$domain\tdovecot:" >> $pf_relay
+        postmap $pf_relay
+
+	## Prüfen, ob eine Quota-Vorgabe fuer Postfaecher existiert
+	quota=$(getconfvalue MailQuota)
+
+	# Quota-Praefix
+	qpraefix='userdb_quota_rule=*:storage='
+
+	# Quota-Regel erzeugen
+	if [[ $quota != "0" ]]; then
+	    quotarule="$qpraefix$quota"
+	else
+	    quotarule=""
+	fi
+
+	## Mailuser-Account anlegen
+	# Homeverzeichnis anlegen
+	mkdir -p $mailhome/$domowner-postmaster/Maildir
+	chown -R vmail.vmail $mailhome/$domowner-postmaster
+	chmod -R o-rwx $mailhome/$domowner-postmaster
+	# Zufallspasswort generieren -- 8 Zeichen, mindestens 1 Grossbuchstabe und 1 Zahl.
+	pass=$(pwgen -cn 8 1)
+	# Verschluesselungsalgorithmus ermitteln
+	scheme=$(getconfvalue DCPWScheme)
+	dpw=$(dovecotpw -s $scheme -p $pass)
+	echo -e "Bitte übermitteln Sie das vergebene Passwort: \"$pass\" an den Besitzer des Postfaches \"$mailaddress\"."
+	# Eintrag in /etc/dovecot/passwd erzeugen
+	echo "$mailaddress:$dpw::::::$quotarule" >> /etc/dovecot/passwd
+	
+	# Mail-Adressen anlegen
+	echo -e "abuse@$domain\tpostmaster@$domain" >> $pf_virtual
+	echo -e "webmaster@$domain\t$postmaster@$domain" >> $pf_virtual
+	postmap $pf_virtual
+    fi
+
+    postfix reload
+fi
+
+
+

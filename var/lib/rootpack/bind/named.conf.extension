@@ -1,0 +1,9 @@
+
+## Stefan Schaefer <stefan@invis-server.org>
+## Für Zonen dieses Nameservers wurde ein gesondertes Verzeichnis angelegt:
+# /etc/named.d/zones
+# Alle darin abgelegten Zonenkonfigurationsdateien müssen in die Datei 
+# /etc/named.zones.include eingetragen werden.
+# Damit bleibt die Konfiguration unabhaengig von vorhandenen openSUSE-Automatismen.
+
+include "/etc/named.zones.include";
