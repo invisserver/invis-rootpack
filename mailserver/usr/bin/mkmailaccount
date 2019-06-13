@@ -1,0 +1,156 @@
+#!/bin/bash
+# Script zum Anlegen eines neuen Mailkontos oder einer Weiterleitung
+# Version: 0.4a
+# (C) 2010 ivins-server.org
+# Author: Stefan Schaefer <stefan@invis-server.org>
+# Questions: http://forum.invis-server.org
+# License: GPLv3
+
+# Globale Einstellungen
+rootpackdir="/etc/rootpack"
+rootpackconfig="$rootpackdir/rootpack.cfg"
+
+usage() {
+    echo "-------------------------------------------------------------------------------------"
+    echo "Übergeben Sie diesem Script die gewünschte neue Mailadresse sowie einen Adresstyp."
+    echo
+    echo "Beispiel: \$> mkmailaccount adresse@example.com type"
+    echo
+    echo "Als Adresstyp (type) stehen \"mailaccount\", \"mailalias\" und \"extalias\" zur Verfügung."
+    echo -e "\"mailaccount\"\tlegt einen neuen Benutzer nebst Postfach an,\n\"mailalias\"\tlediglich eine Weiterleitung auf ein lokal bestehendes Postfach.\n\"extalias\"\terzeugt eine Weiterleitung auf eine externe Adresse."
+    echo "-------------------------------------------------------------------------------------"
+}
+
+# Konfigurationsparameter tauschen
+changevalues() {
+    # Arg1 = Pfad, Arg2 = Datei, Arg3 = sed String
+    cat $1/$2|sed "s%$3%g" > $1/$2.new
+    mv $1/$2.new $1/$2
+}
+
+getconfvalue() {
+    cat $rootpackconfig | grep "$1:" | cut -d ":" -f 2
+}
+
+checkmailaddress() {
+    ## Prüfen, ob es sich um eine gültige Adresse handelt
+    if [[ ! $1 =~ ^[a-zA-Z0-9-]+([._a-zA-Z0-9.-]+)*@[a-zA-Z0-9.-]+\.([a-zA-Z]{2,4}) ]]; then
+	echo "----------------------------------------------------------------------------------------"
+	echo "Sie haben keine gültige EMail-Adresse nach dem Muster \"adresse@example.com\" angegeben."
+	echo "----------------------------------------------------------------------------------------"
+	exit
+    fi
+}
+
+clear
+
+# Adresse und Typ übernehmen
+if [[ -z $1 || -z $2 ]]; then
+    usage
+    exit
+else
+    mailaddress="$1"
+    acounttype="$2"
+fi
+
+checkmailaddress $mailaddress
+
+## Prüfen ob Postfix für die zugehörige Domain verantwortlich ist
+pf_vdomains=$(getconfvalue VirtualDomainDB)
+domain=$(echo "$mailaddress" |cut -d "@" -f2)
+
+punycodedomain=$(idn --quiet $domain)
+
+# Abgefragt wird die Postfix Lookup-Table "virtual_domains"
+# Nebeneffekt ist, dass wir damit den Besitzer der Domain ermitteln. Dieser wurde durch das Script mkzone
+# in die Table virtual_domains eingetragen. Er wird später benötigt.
+domowner=$(postmap -q $punycodedomain $pf_vdomains)
+
+if [[ -z $domowner ]]; then
+    echo "-----------------------------------------------------------------------------------------------"
+    echo -e "Die in der EMail-Adresse angegebene Domain \"$domain\" ist diesem Server unbekannt oder\nwird als Relay-Domain geführt. Verwenden Sie in diesem Fall das Script \"mkvmailaccount\" zum\nAnlegen der Mailkonten."
+    echo "-----------------------------------------------------------------------------------------------"
+    exit
+fi
+
+
+## Prüfen, ob die angegebene Adresse berits existiert
+
+# Virtual Table ermitteln
+pf_virtual=$(getconfvalue VirtualDB)
+
+if [[ -n $(postmap -q $mailaddress $pf_virtual) ]]; then
+    echo "----------------------------------------------------------------------------------"
+    echo "Die angegebene Adresse \"$mailaddress\" existiert bereits."
+    echo "----------------------------------------------------------------------------------"
+    exit
+fi
+
+# Useranteil der Adresse ermitteln
+userpart=$(echo "$mailaddress" |cut -d "@" -f1)
+punycodeaddress="$userpart@$punycodedomain"
+
+case $acounttype in
+    mailaccount)
+	    echo "------------------------------------"
+	    echo "Es wird ein neues Postfach angelegt."
+	    echo "------------------------------------"
+	    # Mailuser-Account anlegen
+	    mailhome=$(getconfvalue MailHome)
+	    useradd -m -d $mailhome/$domowner-$userpart -k $rootpackdir/skel_mailuser -c "Mailaccount $mailaddress" -s /bin/false $domowner-$userpart
+	    # Zufallspasswort generieren -- 8 Zeichen, mindestens 1 Grossbuchstabe und 1 Zahl.
+	    pass=$(pwgen -cn 8 1)
+	    echo $pass | passwd --stdin $domowner-$userpart
+	    echo -e "Bitte übermitteln Sie das vergebene Passwort: \"$pass\" an den Besitzer des Postfaches \"$mailaddress\"."
+	    echo -e "$punycodeaddress\t$domowner-$userpart" >> $pf_virtual
+	    postmap $pf_virtual
+	    postfix reload
+
+	    ;;
+    mailalias)
+	    echo "-------------------------------------"
+	    echo "Es wird ein neuer Mailalias angelegt."
+	    echo "-------------------------------------"
+	    echo
+	    echo "Wählen Sie das Mail-Konto dem die Adresse \"$mailaddress\" zugeordnet werden soll."
+	    echo "Tippen Sie einfach nur die entsprechende Nummer ein."
+	    echo
+	    # Alle zur angegebenen Domain gehörenden Mail-User-Accounts ermitteln. 
+	    accounts=($(cat $pf_virtual| grep -v ^#| grep $punycodedomain | tr '\t' " " | tr -s " " | cut -d " " -f2 | sort -u))
+	    select account in ${accounts[@]}; do
+		seladdress=$account
+
+		break
+	    done
+	    #echo $seladdress
+	    echo -e "$punycodeaddress\t$seladdress" >> $pf_virtual
+	    postmap $pf_virtual
+	    postfix reload
+	
+	    ;;
+    extalias)
+	    echo "--------------------------------------------"
+	    echo "Es wird eine externe Weiterleitung angelegt."
+	    echo "--------------------------------------------"
+	    echo
+	    # Solange fragen, bis verdammt nochmal eine Adresse angegeben wurde.
+	    while [[ -z $extaddress ]]; do
+	        read -p "Geben Sie bitte die externe Zieladresse der Weiterleitung ein: " extaddress
+	    done
+	    checkmailaddress $extaddress
+	    echo -e "$punycodeaddress\t$extaddress" >> $pf_virtual
+	    postmap $pf_virtual
+	    postfix reload
+	
+	    ;;
+    *)
+	    echo "--------------------------------------------"
+	    echo "Es wurde kein korrekter Adresstyp angegeben."
+	    echo "--------------------------------------------"
+	    echo
+	    usage
+	    exit
+	    ;;
+esac
+
+

@@ -1,0 +1,12 @@
+# Include-Datei fuer eigene DNS Zonen
+# (C) 2010 Stefan Schaefer -- invis-server.org
+# Mail: stefan@invis-server.org
+# Die Funktionsweise dieser Datei ist mit der von "named.conf.include"
+# vergleichbar, allerdings ist sie unabhaengig von openSUSE-Automatismen
+# wie SuSEconfig.
+
+# Eigene Zonen-Konfigurationsdateien müssen in /etc/named.d/zones 
+# abgelegt werden. Sie koennen anschließend hier eingebunden werden:
+
+# Beispiel
+# include "/etc/named.d/zones/example.com.conf";

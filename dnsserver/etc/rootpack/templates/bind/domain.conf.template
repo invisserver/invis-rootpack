@@ -1,0 +1,8 @@
+# Zone domain.tld
+# Angelegt am: Datum
+
+zone "domain.tld" in {
+    type master;
+    file "master/domain.zone";
+};
+

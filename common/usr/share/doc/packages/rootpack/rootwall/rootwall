@@ -1,0 +1,309 @@
+#!/bin/bash
+#
+# /sbin/rootwall
+#
+# Einfaches Firewall-Script fuer Rootserver
+#
+# (C) 2009 invis-server.org
+# Autor: Stefan Schaefer
+# Fragen an: stefan@invis-server.org
+# License: GPLv3
+# Version 1.1
+#
+# Das folgende Firewall-Script orientiert sich an den
+# Standardanforderungen eines Rootservers, der in der
+# Hauptsache als DNS, FTP, Web- und Mailserver genutzt
+# wird.
+#
+# Achtung: Das Script ist kein Wundermittel. Es ist lediglich als
+# Ausgangsbasis fuer eigene Experimente gedacht. Wir uebernehmen 
+# keinerlei Haftung fuer eventuelle Schaeden die durch Verwendung
+# dieses Scripts entstehen.
+# 
+# Viel Glueck!
+
+## Evtl. eigene IP ermitteln und Adresse automatisch als Destination bzw. Source in die iptables Kommandos einzubauen
+# Wird bisher nicht verwendet.
+#ipaddr=`ifconfig eth0|grep "inet Adress"|cut -d ":" -f2|cut -d " " -f1`
+
+# Konfigurationsdatei
+RWCONFIG="/etc/rootwall/rootwall.cfg"
+
+if [[ -r $RWCONFIG ]];then
+    . $RWCONFIG
+else
+    echo "Die Konfigurationsdatei $RWCONFIG wurde nicht gefunden."
+    echo "Die Firewall wird nur mit den Diensten SSH, HTTP und HTTPS gestartet"
+    ACTIVE_SERVICES=(ssh http https)
+fi
+
+# Wo liegt iptables
+IPT=`which iptables`
+
+TABLES=(raw mangle nat filter)
+
+## Laden der Kernelmodule ip_tables und nf_conntrack wenn noch nicht geschehen
+if [[ `/sbin/lsmod|grep ip_tables` == "" ]]; then
+    /sbin/modprobe ip_tables
+fi
+
+if [[ `/sbin/lsmod|grep nf_conntrack` == "" && `lsmod|grep ip_conntrack` == "" ]]; then
+    /sbin/modprobe nf_conntrack
+fi
+
+# Alle Regeln entfernen
+function flush {
+    for table in ${TABLES[*]} ; do
+	$IPT -t $table -F
+	$IPT -t $table -X
+    done 
+}
+
+# Grundregeln definieren
+function policy {
+    if [[ $1 == "accept" ]]; then
+	# Default-Policy "Alles was nicht explizit verboten ist, ist erlaubt"
+	$IPT -P INPUT ACCEPT
+	$IPT -P OUTPUT ACCEPT
+	$IPT -P FORWARD ACCEPT
+    else
+	# Default-Policy "Alles was nicht explizit erlaubt ist, ist verboten"
+	$IPT -P INPUT DROP
+	$IPT -P OUTPUT DROP
+    	$IPT -P FORWARD DROP
+    fi
+}
+
+function logallinput {
+	$IPT -A INPUT -m limit --limit 30/minute -j LOG --log-level warning --log-tcp-options --log-ip-options --log-prefix "ROOTWALL Log_all_in "
+}  
+
+# Loopback-Verkehr in jede Richtung erlauben
+function loopok {
+	$IPT -A INPUT -i lo -j ACCEPT
+	$IPT -A OUTPUT -o lo -j ACCEPT
+}
+
+# Ping bis max 1/sec erlauben
+function pingok {
+	# eingehend
+	$IPT -A INPUT -p ICMP --icmp-type 8 -m limit --limit 1/second -j ACCEPT
+	$IPT -A OUTPUT -p ICMP --icmp-type 0 -m state --state ESTABLISHED,RELATED -j ACCEPT
+	# ausgehend
+	$IPT -A OUTPUT -p ICMP --icmp-type 8 -j ACCEPT
+	$IPT -A INPUT -p ICMP --icmp-type 0 -m state --state ESTABLISHED,RELATED -j ACCEPT
+}
+
+# Alle TCP/UDP Pakete, die zu bestehenden Verbindungen gehoeren, werden akzeptiert.
+function estrel {
+	## TCP
+	$IPT -A INPUT -p TCP -m state --state ESTABLISHED,RELATED -j ACCEPT
+	$IPT -A OUTPUT -p TCP -m state --state ESTABLISHED,RELATED -j ACCEPT
+	## UDP
+	$IPT -A INPUT -p UDP -m state --state ESTABLISHED,RELATED -j ACCEPT
+	$IPT -A OUTPUT -p UDP -m state --state ESTABLISHED,RELATED -j ACCEPT
+}
+
+# Ausgehende Verbindungen bedingt zulassen
+function minout {
+	#DNS
+	$IPT -A OUTPUT -p TCP --sport 1024: --dport 53 -m state --state NEW -j ACCEPT
+	$IPT -A OUTPUT -p TCP --sport 53 --dport 53 -m state --state NEW -j ACCEPT
+	$IPT -A OUTPUT -p UDP --sport 1024: --dport 53 -m state --state NEW -j ACCEPT
+	$IPT -A OUTPUT -p UDP --sport 53 --dport 53 -m state --state NEW -j ACCEPT
+	# HTTP für Online Updates
+	$IPT -A OUTPUT -p TCP --sport 1024: --dport 80 -m state --state NEW -j ACCEPT
+	# Zeitsynchronisation
+	$IPT -A OUTPUT -p UDP --sport 1023: --dport 123 -m state --state NEW -j ACCEPT
+	$IPT -A OUTPUT -p UDP --sport 123 --dport 123 -m state --state NEW -j ACCEPT
+}
+
+# Ausgehende Verbindungen generell zulassen
+function allout {
+	$IPT -A OUTPUT -p TCP -m state --state NEW -j ACCEPT
+	$IPT -A OUTPUT -p UDP -m state --state NEW -j ACCEPT
+}
+
+# Regeln für angebotene Dienste
+function service_ssh {
+	    # SSH-Port aus /etc/ssh/sshd_config ermitteln
+	    sshport=`cat /etc/ssh/sshd_config |grep ^Port|cut -d " " -f2`
+	    if [[ -z $sshport ]]; then
+		sshport="22"
+		echo $sshport
+	    fi
+
+	    #Regel erzeugen
+	    $IPT -A INPUT -p TCP -i eth0 --sport 1024: --dport $sshport -m state --state NEW -j ACCEPT
+}
+
+function service_dns {
+	    # DNS Anfragen von und auf Port 53 TCP und UDP erlauben
+	    $IPT -A INPUT -p TCP -i eth0 --sport 53 --dport 53 -m state --state NEW -j ACCEPT
+	    $IPT -A INPUT -p UDP -i eth0 --sport 53 --dport 53 -m state --state NEW -j ACCEPT
+
+	    # DNS anfragen von hohen TCP/UDP erlauben
+	    $IPT -A INPUT -p TCP -i eth0 --sport 1024: --dport 53 -m state --state NEW -j ACCEPT
+	    $IPT -A INPUT -p UDP -i eth0 --sport 1024: --dport 53 -m state --state NEW -j ACCEPT
+}
+
+function service_http {
+	    $IPT -A INPUT -p TCP -i eth0 --sport 1024: --dport 80 -m state --state NEW -j ACCEPT
+}
+
+function service_ntp {
+	    $IPT -A INPUT -p UDP -i eth0 --sport 1023: --dport 123 -m state --state NEW -j ACCEPT
+	    $IPT -A INPUT -p UDP -i eth0 --sport 123 --dport 123 -m state --state NEW -j ACCEPT
+}
+
+function service_https {
+	    $IPT -A INPUT -p TCP -i eth0 --sport 1024: --dport 443 -m state --state NEW -j ACCEPT
+}
+
+# Passiver Modus ist an "vsftpd" angepasst.
+function service_ftp {
+	    # ftp command Port oeffnen
+	    $IPT -A INPUT -p TCP -i eth0 --sport 1024: --dport 21 -m state --state NEW -j ACCEPT
+	    if [[ $ftp_active == "y" ]]; then
+		$IPT -A OUTPUT -p TCP --sport 20 --dport 1024: -m state --state NEW -j ACCEPT
+	    else
+		# Angepasst an vsftp - dieser bietet im passiven Modus nur Ports zw. 30000 und 30100 an.
+		$IPT -A INPUT -p TCP -i eth0 --sport 1024: --dport 30000:30100 -m state --state NEW -j ACCEPT
+	    fi
+}
+
+# Ausgehende FTP-Verbindungen erlauben
+function ftp_out {
+	$IPT -A OUTPUT -p TCP --sport 1024: --dport 21: -m state --state NEW -j ACCEPT
+}
+
+# Eingehendes SMTP
+function service_smtpd {
+	    $IPT -A INPUT -p TCP -i eth0 --sport 1024: --dport 25 -m state --state NEW -j ACCEPT
+}
+# Ausgehendes SMTP
+function service_smtp {
+	    $IPT -A OUTPUT -p TCP --sport 1024: --dport 25 -m state --state NEW -j ACCEPT
+}
+
+function service_smtps {
+	    $IPT -A INPUT -p TCP -i eth0 --sport 1024: --dport 465 -m state --state NEW -j ACCEPT
+}
+
+function service_submission {
+	    $IPT -A INPUT -p TCP -i eth0 --sport 1024: --dport 587 -m state --state NEW -j ACCEPT
+}
+
+function service_pop3 {
+	    $IPT -A INPUT -p TCP -i eth0 --sport 1024: --dport 110 -m state --state NEW -j ACCEPT
+}
+
+function service_pop3s {
+	    $IPT -A INPUT -p TCP -i eth0 --sport 1024: --dport 995 -m state --state NEW -j ACCEPT
+}
+
+function service_imap {
+	    $IPT -A INPUT -p TCP -i eth0 --sport 1024: --dport 143 -m state --state NEW -j ACCEPT
+}
+
+function service_imaps {
+	    $IPT -A INPUT -p TCP -i eth0 --sport 1024: --dport 993 -m state --state NEW -j ACCEPT
+}
+
+function service_sieve {
+	    $IPT -A INPUT -p TCP -i eth0 --sport 1024: --dport 2000 -m state --state NEW -j ACCEPT
+}
+
+function help {
+echo -e "Hilfe zur Verwendung der  Rootwall."
+echo -e "-h, --help - Gibt diese Hilfe aus."
+echo -e "--start - Startet die Rootwall."
+echo -e "--stop, --reset - Stopt die Rootwall und setzt die Default-Policy auf ACCEPT."
+echo -e "--ssh, --justssh - Startet die Rootwall im Server-Wartungsmodus. Es werden nur SSH-Zugriffe erlaubt."
+echo -e "--status - Gibt die aktuell gültigen Firewall-Regeln aus."
+}
+
+if [[ -z $1 ]]; then
+    echo "Rufen Sie rootwall mit einem der folgenden Parameter auf:"; help
+else
+    case $1 in
+	"--start")
+	    # Alle bestehenden Firewall-Regeln und Chains loeschen
+	    flush
+
+	    # Default-Policy "Alles was nicht explizit erlaubt ist, ist verboten"
+	    policy drop
+	
+	    # Loopback-Verkehr in jede Richtung erlauben
+	    loopok
+	
+	    # Ping erlauben
+	    pingok
+	
+	    # Alle TCP/UDP Pakete, die zu bestehenden Verbindungen gehoeren, werden akzeptiert.
+	    estrel
+
+	    # Ausgehende Verbindungen bedingt zulassen
+	    minout
+	
+	    # Ausgehende FTP-Verbindungen zulassen
+	    ftp_out
+	    
+	    # Logging Experiment
+	    logallinput
+	    
+	    ### Regeln fuer Dienste setzen
+	    for service in ${ACTIVE_SERVICES[*]}; do
+		service_$service 2> /dev/null && echo "Firewall-Regeln für Service $service gesetzt" \
+		|| echo "Fehler: Firewall-Regeln für $service konnten nicht gesetzt werden."
+	    done
+	;;
+
+        "--justssh" | "--ssh")
+	    ## Wartungsmodus
+	    # Alle bestehenden Firewall-Regeln und Chains loeschen
+	    flush
+
+	    # Default-Policy "Alles was nicht explizit erlaubt ist, ist verboten"
+	    policy drop
+	
+	    # Loopback-Verkehr in jede Richtung erlauben
+	    loopok
+	
+	    # Ping erlauben
+	    pingok
+	
+	    # Alle TCP/UDP Pakete, die zu bestehenden Verbindungen gehoeren, werden akzeptiert.
+	    estrel
+	
+	    # Ausgehende Verbindungen bedingt zulassen
+	    minout
+	    
+	    # Ausgehende FTP-Verbindungen zulassen
+	    ftp_out
+	    
+	    # Logging Experiment
+	    logallin
+	
+	    ## SSH
+	    service_ssh 2> /dev/null && echo "Firewall-Regeln für Wartungsmodus (nur SSH) gesetzt." \
+		|| echo "Fehler: Firewall-Regeln für Wartungsmodus (nur SSH) konnten nicht gesetzt werden."
+	;;
+
+	"--stop"|"--reset")
+	    # Alle bestehenden Firewall-Regeln loeschen
+	    flush
+
+	    # Default-Policy "Alles was nicht explizit verboten ist, ist erlaubt"
+	    policy accept;;
+	
+	"--status")
+	    #Liste aller Regeln ausgeben
+	    $IPT --list;;
+	"-h"|"--help")
+	    help;;
+	*)
+	    echo "Rufen Sie rootwall mit einem der folgenden Parameter auf:"; help
+	;;
+    esac
+fi

@@ -1,0 +1,9 @@
+"Rootwall" ist ein einfaches Firewall-Script, angepasst an die 
+Erfordernisse eines Web- und Mail, und Nameservers.
+
+Es dient vor allem dazu die Funktionsweise einer Firewall und
+des Kommandos iptales zu verstehen.
+
+Es kann durchaus produktiv eingesetzt werden. Unter openSUSE,
+bzw. SLES sollte allerdings der SuSEfirewall2 der Vorzug
+gegeben werden.

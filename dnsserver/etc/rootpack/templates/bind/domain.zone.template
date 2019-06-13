@@ -1,0 +1,18 @@
+$TTL 1D
+@		IN SOA ns1.domain.tld. root.domain.tld. (
+				2010042401	;Seriennummer
+				6H		;Auffrischen nach 6 Stunden
+				1H		;Erneut versuchen nach 1 Stunde
+				1W		;Laeuft nach 1 Woche ab
+				1D)		;Minimal gueltig fuer 1 Tag
+		
+		
+		IN NS	ns1.domain.tld.
+		IN MX 10	mail.domain.tld.
+		IN A	0.0.0.0
+*		IN A	0.0.0.0
+server		IN A	0.0.0.0
+
+www		IN CNAME	server
+ns1		IN A	0.0.0.0
+mail		IN A	0.0.0.0

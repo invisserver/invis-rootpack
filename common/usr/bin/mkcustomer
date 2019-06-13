@@ -1,0 +1,226 @@
+#!/bin/bash
+# Script zum Anlegen eines neuen Kunden
+# Version: 0.5
+# (C) 2010 invis-server.org
+# Author: Stefan Schaefer <stefan@invis-server.org>
+# Questions: http://forum.invis-server.org
+# License: GPLv3
+
+# Globale Einstellungen
+rootpackdir="/etc/rootpack"
+rootpackconfig="$rootpackdir/rootpack.cfg"
+# Setup-Dialog Titel
+dialogtitle="Neuen Kunden anlegen"
+dialogshorthelp="Cursor- ([Auf]/[Ab]) und Tabulatortaste zur Navigation, Leertaste zum auswählen und Enter-Taste zum Bestätigen verwenden."
+
+usage() {
+    echo "----------------------------------------------------------"
+    echo "Übergeben Sie diesem Script den usernamen des neuen Kunden";
+    echo
+    echo "Beispiel: \$> mkcustomer username"
+    echo "----------------------------------------------------------"
+}
+
+# Konfigurationsparameter tauschen
+changevalues() {
+    # Arg1 = Pfad, Arg2 = Datei, Arg3 = sed String
+    cat $1/$2|sed "s%$3%g" > $1/$2.new
+    mv $1/$2.new $1/$2
+}
+
+getconfvalue() {
+    cat $rootpackconfig | grep "$1:" | cut -d ":" -f 2
+}
+
+yesno() {
+    # Argument $1 = Fragetext $2 = Dialogtitel
+    dialog --backtitle "$dialogtitle" --title "$2" --yesno "$1" 0 0
+}
+
+textbox() {
+    # Argument $1 = Ausgabedatei $2 = Dialogtitel $3 = Exit-Label
+    if [[ -z $3 ]]; then
+        dialog --backtitle "$dialogtitle" --title "$2" --textbox "$1" 0 0
+    else
+	dialog --backtitle "$dialogtitle" --title "$2" --exit-label "$3" --textbox "$1" 0 0
+    fi
+}
+
+msgbox() {
+    # Argument $1 = Ausgabedatei $2 = Dialogtitel
+    dialog --backtitle "$dialogtitle" --title "$2" --msgbox "$1" 0 0
+}
+
+pgbox() {
+    dialog --sleep 2 --backtitle "$dialogtitle" --title "$windowtitle" --progressbox  "$pgsubtitle" 25 110
+}
+
+waitbox() {
+    # Fortschrittsbalken
+    i=0
+
+    { while [ $i -lt 50 ]; do
+	(( i=$i+1 ))
+	echo $(( $i * 100 / 50 ))
+	sleep 0.1
+    done } | dialog --backtitle "$dialogtitle" --title "Modul \"$1\" abgeschlossen" --gauge "Sie haben ca. 5 Sekunden Zeit um das Setup-Script mit \"Strg+C\" abzubrechen. Beim nächsten Aufruf wir es mit Modul \"$2\" fortgesetzt." 8 70 0
+}
+
+waitinfobox() {
+    # Fortschrittsbalken
+    i=0
+
+    { while [ $i -lt 70 ]; do
+	(( i=$i+1 ))
+	echo $(( $i * 100 / 70 ))
+	sleep 0.1
+    done } | dialog --backtitle "$dialogtitle" --title "$2" --gauge "$1" 8 70 0
+}
+
+# Benutzername uebernehmen
+username="$1"
+
+if [[ -z $username ]]; then
+    usage
+    exit
+fi
+
+if [[ -n $(getent passwd | grep $username) ]]; then
+    echo "Der Benutzername ist bereits vergeben."
+fi
+
+# Ein paar Fragen zum neuen Benutzer
+
+#---# Kontaktdaten
+    IFS=$'\n'
+    ok=0
+    while (( $ok != "8" ));do
+	dialog --backtitle "$dialogtitle" --title "Kontaktdaten" --form "$dialogshorthelp\n\n
+Die eingegebenen Daten sollten der Realität entsprechen, da sie für die Rechnungsstellung verwendet werden.\n\n
+Alle Eingaben werden mehr oder weniger auf Plausibilität geprüft, fehlerhaft ausgefüllte Felder werden geleert." 32 80 18 \
+	"Vorname:" 2 2 "$gn" 2 16 55 0\
+	"Nachname:" 4 2 "$sn" 4 16 55 0\
+	"Organisation:" 6 2 "$organisation" 6 16 55 0\
+	"email:" 8 2 "$email" 8 16 55 0\
+	"Stadt:" 10 2 "$city" 10 16 55 0\
+	"PLZ:" 12 2 "$plz" 12 16 55 0\
+	"Strasse HNr.:" 14 2 "$street" 14 16 55 0\
+	"Tel.:" 16 2 "$tel" 16 16 55 0\
+	"Fax.:" 18 2 "$fax" 18 16 55 0\
+	2>"$0_temp"
+	exitcode=${?}
+	contactvalues=($(cat "$0_temp"))
+
+	# Doch noch abbrechen
+	echo $exitcode
+	if [[ $exitcode == "1" || $exitcode == "255" ]]; then
+	    exit
+	fi
+
+	# Werte prüfen und zuordnen
+	if [[ -n ${contactvalues[0]} ]];then
+	    gn="${contactvalues[0]}"
+	    ok=1
+	fi
+
+	if [[ -n ${contactvalues[1]} ]];then
+	    sn="${contactvalues[1]}"
+	    (( ok=$ok + 1 ))
+	fi
+
+	if [[ -n ${contactvalues[2]} ]];then
+	    organisation="${contactvalues[2]}"
+	    (( ok=$ok + 1 ))
+	fi
+	
+	if [[ ${contactvalues[3]} =~ ^[a-zA-Z0-9-]+([._a-zA-Z0-9.-]+)*@[a-zA-Z0-9.-]+\.([a-zA-Z]{2,4}) ]];then
+	    email="${contactvalues[3]}"
+	    (( ok=$ok + 1 ))
+	fi
+
+	if [[ -n ${contactvalues[4]} ]];then
+	    city="${contactvalues[4]}"
+	    (( ok=$ok + 1 ))
+	fi
+
+	if (( ${#contactvalues[5]} == 5 ));then
+	    plz="${contactvalues[5]}"
+	    (( ok=$ok + 1 ))
+	fi
+	
+	if [[ -n ${contactvalues[6]} ]];then
+	    street="${contactvalues[6]}"
+	    (( ok=$ok + 1 ))
+	fi
+
+	if [[ -n ${contactvalues[7]} ]];then
+	    tel="${contactvalues[7]}"
+	    (( ok=$ok + 1 ))
+	fi
+
+	    fax="${contactvalues[8]}"
+    done
+
+# SSH-Login ermoeglichen    
+    yesno "Soll sich der Kunde per SSH am Server anmelden dürfen?\n" "SSH Zugang"
+    shell=${?}
+    
+    if [[ $shell == "0" ]]; then
+	shell="/bin/bash"
+	allowlogin="ja"
+    else
+	shell="/bin/false"
+	allowlogin="nein"
+    fi
+    
+    if [[ ! -f $rootpackdir/kunden ]]; then
+	mkdir -p $rootpackdir/kunden
+    fi
+
+IFS=$oldifs
+
+# Alle Daten in Kundendatei Schreiben
+echo -e "Kontaktdaten" > $rootpackdir/kunden/$username-$gn.$sn.info
+echo -e "------------">> $rootpackdir/kunden/$username-$gn.$sn.info
+echo -e "Name:\t\t$gn $sn" >> $rootpackdir/kunden/$username-$gn.$sn.info
+echo -e "Organisation:\t$organisation" >> $rootpackdir/kunden/$username-$gn.$sn.info
+echo -e "Ort:\t\t$plz $city" >> $rootpackdir/kunden/$username-$gn.$sn.info
+echo -e "Anschrift:\t$street" >> $rootpackdir/kunden/$username-$gn.$sn.info
+echo -e "email-Addresse:\t$email" >> $rootpackdir/kunden/$username-$gn.$sn.info
+echo -e "Tel.:\t\t$tel" >> $rootpackdir/kunden/$username-$gn.$sn.info
+echo -e "Fax.:\t\t$fax" >> $rootpackdir/kunden/$username-$gn.$sn.info
+
+echo >> $rootpackdir/kunden/$username-$gn.$sn.info
+echo -e "Konfigurationsdaten" >> $rootpackdir/kunden/$username-$gn.$sn.info
+echo -e "-------------------">> $rootpackdir/kunden/$username-$gn.$sn.info
+echo -e "Username:\t$username">> $rootpackdir/kunden/$username-$gn.$sn.info
+echo -e "SSH-Login erlaubt:\t$allowlogin" >> $rootpackdir/kunden/$username-$gn.$sn.info
+
+echo >> $rootpackdir/kunden/$username-$gn.$sn.info
+echo -e "Domains des Kunden" >> $rootpackdir/kunden/$username-$gn.$sn.info
+echo -e "-------------------">> $rootpackdir/kunden/$username-$gn.$sn.info
+
+
+# Vhost Verzeichnis ermitteln
+vhostdir=$(getconfvalue VhostDir)
+
+# Benutzerkonto anlegen
+useradd -c "$gn $sn, $organisation" -k $rootpackdir/skel_customer -m -d "$vhostdir/$username" -s $shell $username
+
+# Passwortverzeichnis fuer HTTP-Auth anlegen
+mkdir -p $vhostdir/$username/passwd_files
+
+# Passwort erzeugen
+pass=$(pwgen -cn 8 1)
+echo $pass | passwd --stdin $username
+echo -e "Bitte übermitteln Sie das Passwort: \"$pass\" an den Kunden: \"$username\"."
+echo -e "Es wird sowohl für den Zugriff auf die Webalizer-Auswertung als auch auf\nden Server allgemein benötigt."
+
+# Passwortdatenbank u.A. fuer Webalizer anlegen
+htdbm2 -csb -TSDBM $vhostdir/$username/passwd_files/passdb_$username $username $pass
+
+# Kundeninfo ins Homedir kopieren
+cp $rootpackdir/kunden/$username-$gn.$sn.info "$vhostdir/$username/infos/"
+
+# Temp-Datei loeschen
+rm -f $0_temp
