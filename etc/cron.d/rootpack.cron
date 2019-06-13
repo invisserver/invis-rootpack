@@ -1,8 +1,0 @@
-# Umgebungsvariablen setzen
-PATH="/sbin:/usr/sbin:/usr/local/sbin:/root/bin:/usr/local/bin:/usr/bin:/bin:/usr/lib/mit/bin:/usr/lib/mit/sbin"
-MAILTO=root
-
-# Webalizer
-# jeden Morgen um 5:00Uhr Webalizer-Statistiken aktualisieren
-0 5 * * * * root /usr/bin/runwebalizer
-
