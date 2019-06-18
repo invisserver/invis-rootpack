@@ -1,18 +1,19 @@
 $TTL 1D
-@		IN SOA ns1.domain.tld. root.domain.tld. (
-				2010042401	;Seriennummer
+@		IN SOA ns1.dnsserver.tld. root.domain.tld. (
+				2017102701	;Seriennummer
 				6H		;Auffrischen nach 6 Stunden
 				1H		;Erneut versuchen nach 1 Stunde
 				1W		;Laeuft nach 1 Woche ab
 				1D)		;Minimal gueltig fuer 1 Tag
 		
 		
-		IN NS	ns1.domain.tld.
-		IN MX 10	mail.domain.tld.
-		IN A	0.0.0.0
-*		IN A	0.0.0.0
-server		IN A	0.0.0.0
+		IN NS	ns1.dnsserver.tld.
+		IN NS	nsb7.schlundtech.de.
+		IN NS	nsc7.schlundtech.de.
+		IN NS	nsd7.schlundtech.de.
+		IN MX 10	mail1.fspisp.de.
 
-www		IN CNAME	server
-ns1		IN A	0.0.0.0
+ns1.dnsserver.tld.	IN A	1.1.1.1
+
+www		IN A	0.0.0.0
 mail		IN A	0.0.0.0

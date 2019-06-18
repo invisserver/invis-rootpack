@@ -1,0 +1,6 @@
+acl secondaries {
+    # Hier die Adressen der bekannten Secondary-
+    # DNS-Server eintragen
+    # x.x.x.x;
+};
+

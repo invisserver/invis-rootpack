@@ -1,0 +1,6 @@
+acl blackhole {
+    # hier IP-Adressen oder Netzwerke eintragen,
+    # denen der DNS-Server gar nicht antworten soll.
+    # 2.0.0.0;
+};
+

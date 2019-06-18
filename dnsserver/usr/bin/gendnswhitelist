@@ -1,0 +1,26 @@
+#!/bin/bash
+# Automatisches erzeugen einer DNS allow query whitelist fuer bind.
+# Basis fuer die Liste ist iste eine Liste zulaessiger Hostnames.
+
+# Arbeitsverzeichis
+workingdir="/etc/named.d"
+rootpackdir="/etc/rootpack"
+# Namensliste
+whitelistnames="$rootpackdir/whitelist.names"
+
+# Whitelist
+wl="$workingdir/named.whitelist"
+
+# Neue whitelist anlegen
+echo "acl whitelist {" > $wl
+
+for name in $(cat $whitelistnames); do
+    ip=$(dig @localhost $name +short)
+    if [[ -n $ip ]]; then
+	echo "$ip;" >> $wl
+    fi
+done
+
+echo "};" >> $wl
+
+systemctl reload named.service

@@ -12,6 +12,7 @@
 rootpackdir="/etc/rootpack"
 rootpackconfig="$rootpackdir/rootpack.cfg"
 target="/etc/named.keys"
+whitelistfile="/etc/named.d/whitelist.names"
 # Bildschirm putzen
 clear
 
@@ -41,17 +42,31 @@ else
     customer=$2
 fi
 
-## Schlüsseldateien erzeugen
-custhomepath=$(getent passwd|grep -e "^$customer:"|cut -d ":" -f6)
-pathtofiles="$custhomepath/files/ddns_keyfiles"
+## Pruefen, ob die genannte Domain lokal auf diesem DNS-Server gefuert wird
+domain=$(echo $fqdn | cut -d "." -f 2-)
+echo $domain
 
-exists=$(ls $pathtofiles|grep $fqdn)
-
-# Pruefen, ob es bereits Schluessel fuer diesen Host gibt.
-if [[ -n $exists ]]; then
-    echo "DNSSec-Schlüssel für den Host $fqdn existieren bereits"
-    exit
+if [[ ! $(dig @localhost $domain NS +short |grep `hostname -f`) ]]; then
+    echo "Die Domain des genannten Hosts wird nicht auf diesem Nameserver geführt."
+#    exit
 fi
+
+## Pruefen, ob die genannte Domain dem Kunden gehoert
+if [[ ! $(cat $rootpackdir/kunden/$customer-* |grep "^$domain$") ]]; then
+    echo -e "Achtung die Domain $domain gehört nicht dem genannten Kunden.\n"
+
+    until [[ $yesno =~ [j,n] ]]; do
+	read -p "Soll trotzdem fortgefahren werden? [j/n]: " yesno
+    done
+    
+    if [[ $yesno == "n" ]]; then
+	exit
+    fi
+fi
+
+## Schluesseldateien erzeugen
+#custhomepath=$(getent passwd|grep -e "^$customer:"|cut -d ":" -f6)
+pathtofiles="$rootpackdir/kunden/ddns_keyfiles/$customer"
 
 # Schluesselverzeichnis anlegen, wenn nicht vorhanden
 if [[ ! -d $pathtofiles ]]; then
@@ -59,18 +74,29 @@ if [[ ! -d $pathtofiles ]]; then
     mkdir -p $pathtofiles
 fi
 
+# Testen, ob der Schluessel bereits existiert.
+exists=$(ls $pathtofiles|grep $fqdn)
+
+# Pruefen, ob es bereits Schluessel fuer diesen Host gibt.
+if [[ -n $exists ]]; then
+    echo "DNSSec-Schlüssel für den Host $fqdn existieren bereits."
+    exit
+fi
+
 # Schluessel-Dateien erzeugen
 dnssec-keygen -v 0 -r /dev/urandom -K $pathtofiles -a HMAC-MD5 -b 512 -n HOST $fqdn
 
-# Dateien dem Besitzer uebereignen
-chown -R $customer.users $pathtofiles
-
 # Schluessel-String extrahieren
 keystring=$(cat $pathtofiles/*$fqdn*.private|grep "Key:"|tr -d " "|cut -d ":" -f2)
-comment=$(cat $custhomepath/infos/$customer*.info |grep "Name:"|tr -d "\t" |cut -d ":" -f2)
+comment=$(cat $rootpackdir/kunden/$customer-*.info |grep "Name:"|tr -d "\t" |cut -d ":" -f2)
 
 # Schluessel in named.keys eintragen
 echo -e "\n# $comment\nkey $fqdn {\n\talgorithm HMAC-MD5;\n\tsecret \"$keystring\";\n};" >> $target
 
+# Hostnamen in Whitelist fuer DNS Abfragen eintragen
+if [[ ! $(cat $whitelistfile | grep $fqdn) ]]; then
+    echo $fqdn >> $whitelistfile
+fi
+
 # Ausgabe
-echo -e "Die Schlüssel-Dateien wurden im Homeverzeichnis von \n$customer unter \"files/dnssec_keyfiles\" abgelegt und\nin \"/etc/named.keys\" eingetragen.\n\nDie zugehörige Zone muss von Hand angepasst werden."
+echo -e "Die Schlüssel-Dateien wurden in $rootpackdir unter \"kunden/dnssec_keyfiles/$customer\" abgelegt und\nin \"/etc/named.keys\" eingetragen.\n\nDie zugehörige Zone muss von Hand angepasst werden."

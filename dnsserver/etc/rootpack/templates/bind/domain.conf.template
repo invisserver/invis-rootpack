@@ -4,5 +4,6 @@
 zone "domain.tld" in {
     type master;
     file "master/domain.zone";
+    allow-query { any; };
 };
 

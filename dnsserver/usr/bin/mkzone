@@ -42,11 +42,6 @@ zoneconftemplate=$(getconfvalue ZoneConfTemplate)
 zonedir=$(getconfvalue ZoneDir)
 #echo $zonedir
 
-# Postfix Virtual Maps abfragen
-pf_virtual=$(getconfvalue VirtualDB)
-pf_vdomain=$(getconfvalue VirtualDomainDB)
-pf_relay=$(getconfvalue RelayDB)
-
 # Bildschirm putzen
 clear
 
@@ -61,7 +56,7 @@ else
 fi
 
 # Testen, ob der Kunde/User existiert, wenn nicht -> Hinweis & Script beenden.
-if [[ -z $(getent passwd | grep "$zowner:") ]]; then
+if [[ -z $(ls $rootpackdir/kunden/ | grep "$zowner-") ]]; then
     echo -e "Der angegebene Username: $zowner existiert nicht.\nBitte legen Sie ihn zunächst mit dem Script \"mkcustomer\" an."
     exit
 fi
@@ -119,93 +114,44 @@ if [[ $nozone == "1" ]]; then
     string="domain.zone%$domain.zone"
     changevalues $path $file "$string"
     
+    ## Zone anpassen
+    # IP Adresse des Default Webservers ermitteln
+    #wsip=$(dig $(cat $rootpackdir/kunden/$zowner-*| grep ^Webserver|tr "\t" " "| tr -s " "| cut -d ":" -f2) +short)
+    webserver=`getconfvalue DefaultWebserver`
+    wsip=`dig $webserver +short`
+    
+    if [[ `echo $wsip | grep "root-servers"` ]]; then
+	wsip="0.0.0.0"
+    fi
+    
     # Zonendefinition an Domain anpassen
     path="$zonedir"
     file="$domain.zone"
+
+    dnsserver=$(hostname -f)
+    dnsip=$(dig $dnsserver A +short)
+    
+    string="ns1.dnsserver.tld%$dnsserver"
+    echo $string
+    changevalues $path $file "$string"
+
+    string="1.1.1.1%$dnsip"
+    echo $string
+    changevalues $path $file "$string"
+
     string="domain.tld%$domain"
+    echo $string
     changevalues $path $file "$string"
     
-    string="0.0.0.0%$myip"
+    string="0.0.0.0%$wsip"
+    echo $string
     changevalues $path $file "$string"
     
     # Zone in die include-Datei eintragen
     echo "include \"/etc/named.d/zones/$domain.conf\";" >> /etc/named.zones.include
     # Nameserver neu laden
-    /etc/init.d/named restart
+    systemctl restart named.service
     
     # Domain in die Kundendatei eintragen
     echo -e "$domain" >> $rootpackdir/kunden/$zowner-*.info
-    # Info-Datei ins Home-Verzeichnis des Users kopieren
-    zownershome=$(getent passwd|grep "$zowner:" |cut -d ":" -f 6)
-    cp $rootpackdir/kunden/$zowner*.info $zownershome/infos/
-
-    ## Mail-Account System und Pfad zu den Maildirs ermitteln
-    mailaccsys=$(getconfvalue MailAccSys)
-    mailhome=$(getconfvalue MailHome)
-    
-    if [[ $mailaccsys == "virtual" ]]; then
-        # Domain fuer Postfix bekannt machen
-	echo -e "$domain\t$zowner" >> $pf_vdomain
-        postmap $pf_vdomain
-
-	# Role-Account postmaster bei Bedarf anlegen
-	if [[ -z $(getent passwd| grep $zowner-postmaster) ]]; then
-	    useradd -m -d $mailhome/$zowner-postmaster -k $rootpackdir/skel_mailuser -c "Postmaster $domain" -s /bin/false $zowner-postmaster
-	    # Passwort erzeugen
-	    pass=$(pwgen -cn 8 1)
-	    echo $pass | passwd --stdin $zowner-postmaster
-	    echo -e "Bitte übermitteln Sie das vergebene Passwort: \"$pass\" an den Besitzer der Domain $domain"
-	else
-	    echo -e "Das zugehörige Postmaster Benutzerkonto \"$zowner-postmaster\" existiert bereits. Es wurde nicht geändert."
-	fi
-    
-	# Mail-Adressen anlegen
-	echo -e "postmaster@$domain\t$zowner-postmaster" >> $pf_virtual
-	echo -e "abuse@$domain\t$zowner-postmaster" >> $pf_virtual
-	echo -e "webmaster@$domain\t$zowner-postmaster" >> $pf_virtual
-	postmap $pf_virtual
-
-    elif [[ $mailaccsys == "relay" ]]; then
-
-        # Domain fuer Postfix bekannt machen
-	echo -e "$domain\tdovecot:" >> $pf_relay
-        postmap $pf_relay
-
-	## Prüfen, ob eine Quota-Vorgabe fuer Postfaecher existiert
-	quota=$(getconfvalue MailQuota)
-
-	# Quota-Praefix
-	qpraefix='userdb_quota_rule=*:storage='
-
-	# Quota-Regel erzeugen
-	if [[ $quota != "0" ]]; then
-	    quotarule="$qpraefix$quota"
-	else
-	    quotarule=""
-	fi
-
-	## Mailuser-Account anlegen
-	# Homeverzeichnis anlegen
-	mkdir -p $mailhome/$domowner-postmaster/Maildir
-	chown -R vmail.vmail $mailhome/$domowner-postmaster
-	chmod -R o-rwx $mailhome/$domowner-postmaster
-	# Zufallspasswort generieren -- 8 Zeichen, mindestens 1 Grossbuchstabe und 1 Zahl.
-	pass=$(pwgen -cn 8 1)
-	# Verschluesselungsalgorithmus ermitteln
-	scheme=$(getconfvalue DCPWScheme)
-	dpw=$(dovecotpw -s $scheme -p $pass)
-	echo -e "Bitte übermitteln Sie das vergebene Passwort: \"$pass\" an den Besitzer des Postfaches \"$mailaddress\"."
-	# Eintrag in /etc/dovecot/passwd erzeugen
-	echo "$mailaddress:$dpw::::::$quotarule" >> /etc/dovecot/passwd
-	
-	# Mail-Adressen anlegen
-	echo -e "abuse@$domain\tpostmaster@$domain" >> $pf_virtual
-	echo -e "webmaster@$domain\t$postmaster@$domain" >> $pf_virtual
-	postmap $pf_virtual
-    fi
-
-    postfix reload
 fi
-
-
-
