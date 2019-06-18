@@ -1,0 +1,8 @@
+#!/bin/bash
+# Dehydrated Hook Script
+# add for each service which has to be reloaded after new certs are deployed a systemctl command
+
+# IMAP-Server
+systemctl reload dovecot.service
+# SMTP-Server
+systemctl reload dovecot.service
