@@ -221,6 +221,7 @@ if [[ -d $vhostdir ]]; then
 
     # Passwortdatenbank u.A. fuer Webalizer anlegen
     htdbm2 -csb -TSDBM $vhostdir/$username/passwd_files/passdb_$username $username $pass
+    chown -R $username $vhostdir/$username
 fi
 
 # Temp-Datei loeschen
