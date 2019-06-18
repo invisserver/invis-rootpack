@@ -1,9 +1,8 @@
 #!/bin/bash
 # Script zum Anlegen eines neuen Kunden
-# Version: 0.5
-# (C) 2010 invis-server.org
-# Author: Stefan Schaefer <stefan@invis-server.org>
-# Questions: http://forum.invis-server.org
+# Version: 0.6
+# (C) 2010,2019 Stefan Schaefer <stefan@invis-server.org>
+# Questions: info@invis-server.org
 # License: GPLv3
 
 # Globale Einstellungen
@@ -200,15 +199,11 @@ echo >> $rootpackdir/kunden/$username-$gn.$sn.info
 echo -e "Domains des Kunden" >> $rootpackdir/kunden/$username-$gn.$sn.info
 echo -e "-------------------">> $rootpackdir/kunden/$username-$gn.$sn.info
 
-
 # Vhost Verzeichnis ermitteln
 vhostdir=$(getconfvalue VhostDir)
 
 # Benutzerkonto anlegen
 useradd -c "$gn $sn, $organisation" -k $rootpackdir/skel_customer -m -d "$vhostdir/$username" -s $shell $username
-
-# Passwortverzeichnis fuer HTTP-Auth anlegen
-mkdir -p $vhostdir/$username/passwd_files
 
 # Passwort erzeugen
 pass=$(pwgen -cn 8 1)
@@ -216,11 +211,17 @@ echo $pass | passwd --stdin $username
 echo -e "Bitte übermitteln Sie das Passwort: \"$pass\" an den Kunden: \"$username\"."
 echo -e "Es wird sowohl für den Zugriff auf die Webalizer-Auswertung als auch auf\nden Server allgemein benötigt."
 
-# Passwortdatenbank u.A. fuer Webalizer anlegen
-htdbm2 -csb -TSDBM $vhostdir/$username/passwd_files/passdb_$username $username $pass
+# Nur wenn das vHost-Verzeichnis existiert ist dies der Webserver
+if [[ -d $vhostdir ]]; then
+    # Passwortverzeichnis fuer HTTP-Auth anlegen
+    mkdir -p $vhostdir/$username/passwd_files
+    mkdir -p "$vhostdir/$username/infos/"
+    # Kundeninfo ins Homedir kopieren
+    cp $rootpackdir/kunden/$username-$gn.$sn.info "$vhostdir/$username/infos/"
 
-# Kundeninfo ins Homedir kopieren
-cp $rootpackdir/kunden/$username-$gn.$sn.info "$vhostdir/$username/infos/"
+    # Passwortdatenbank u.A. fuer Webalizer anlegen
+    htdbm2 -csb -TSDBM $vhostdir/$username/passwd_files/passdb_$username $username $pass
+fi
 
 # Temp-Datei loeschen
 rm -f $0_temp
