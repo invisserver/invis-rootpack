@@ -31,7 +31,7 @@
     SSLCertificateChainFile /etc/dehydrated/certs/www.example.com/chain.pem
 
     # Webalizer Alias
-    #Alias /webalizer /srv/www/vhosts/username/dummy-host.example.com/webalizer
+    #Alias /webalizer /srv/www/vhosts/username/sites/dummy-host.example.com/webalizer
     
     # Wenn suexex Modul geladen ist SuexecUserGroup Direktive setzen
     <ifModule mod_suexec.c>
@@ -54,7 +54,7 @@
 	<ifModule mod_fcgid.c>
 	    <FilesMatch "\.php$">
 		AddHandler fcgid-script .php
-		FCGIWrapper /srv/www/vhosts/username/dummy-host.example.com/wrapper/fcgid-wrapper .php
+		FCGIWrapper /srv/www/vhosts/username/sites/dummy-host.example.com/wrapper/fcgid-wrapper .php
 		Options +ExecCGI
 	    </FilesMatch>
 	</ifModule>
@@ -63,7 +63,7 @@
     # DocumentRoot: The directory out of which you will serve your
     # documents. By default, all requests are taken from this directory, but
     # symbolic links and aliases may be used to point to other locations.
-    DocumentRoot /srv/www/vhosts/username/dummy-host.example.com/htdocs
+    DocumentRoot /srv/www/vhosts/username/sites/dummy-host.example.com/htdocs
 
     # if not specified, the global error log is used
     ErrorLog /var/log/apache2/dummy-host.example.com-error_log
@@ -90,7 +90,7 @@
     # "/srv/www/cgi-bin" should be changed to whatever your ScriptAliased
     # CGI directory exists, if you have one, and where ScriptAlias points to.
     #
-    <Directory "/srv/www/vhosts/username/dummy-host.example.com/cgi-bin">
+    <Directory "/srv/www/vhosts/username/sites/dummy-host.example.com/cgi-bin">
 	AllowOverride None
 	Options +ExecCGI -Includes
 	<IfModule mod_access_compat.c>
@@ -105,7 +105,7 @@
     #
     # This should be changed to whatever you set DocumentRoot to.
     #
-    <Directory "/srv/www/vhosts/username/dummy-host.example.com/htdocs">
+    <Directory "/srv/www/vhosts/username/sites/dummy-host.example.com/htdocs">
     
 	#
 	# Possible values for the Options directive are "None", "All",
@@ -141,7 +141,7 @@
     </Directory>
     
 #    # Webalizer Verzeichnis
-#    <Directory "/srv/www/vhosts/username/dummy-host.example.com/webalizer">
+#    <Directory "/srv/www/vhosts/username/sites/dummy-host.example.com/webalizer">
 #	
 #	# Zugriff auf .htaccess-Datei regeln
 #	<Files ~ "^.ht">
