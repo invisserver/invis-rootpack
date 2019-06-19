@@ -88,7 +88,7 @@ cp /etc/rootpack/templates/apache2/favicon.ico $docroot/
 
 # .htaccess-Datei fuer Webalizer kopieren und anpassen
 cp /etc/rootpack/templates/webalizer/.htaccess $vhostdir/$fqdn/webalizer/
-cp -r /etc/rootpack/templates/webalizer/flags/ $vhostdir/$fqdn/webalizer/
+#cp -r /etc/rootpack/templates/webalizer/flags/ $vhostdir/$fqdn/webalizer/
 
 path="$vhostdir/$fqdn/webalizer"
 file=".htaccess"
