@@ -53,7 +53,7 @@ hoster=$(getconfvalue Hoster)
 hosterurl=$(getconfvalue HosterUrl)
 
 # Verzeichnis der vhosts
-vhostdir=$(getconfvalue VhostDir)/$vhuser
+vhostdir=$(getconfvalue VhostDir)/$vhuser/sites
 docroot="$vhostdir/sites/$domain/htdocs"
 cgidir="$vhostdir/sites/$domain/cgi-bin"
 
@@ -87,8 +87,8 @@ mkdir -p $vhostdir/$domain/wrapper
 cp /etc/rootpack/templates/apache2/favicon.ico $docroot/
 
 # .htaccess-Datei fuer Webalizer kopieren und anpassen
-cp /etc/rootpack/templates/webalizer/.htaccess $vhostdir/sites/$domain/webalizer/
-cp -r /etc/rootpack/templates/webalizer/flags/ $vhostdir/sites/$domain/webalizer/
+cp /etc/rootpack/templates/webalizer/.htaccess $vhostdir/$domain/webalizer/
+cp -r /etc/rootpack/templates/webalizer/flags/ $vhostdir/$domain/webalizer/
 
 path="$vhostdir/$domain/webalizer"
 file=".htaccess"
