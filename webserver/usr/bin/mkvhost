@@ -31,16 +31,16 @@ getconfvalue() {
 clear
 
 # Domain angegeben?
-domain="$1"
+fqdn="$1"
 vhuser="$2"
 
-if [[ -z $domain || -z $vhuser ]]; then
+if [[ -z $fqdn || -z $vhuser ]]; then
     usage
     exit
 fi
 
 # Konfigurationsparameter ermitteln
-myip=$(ifconfig eth0|grep "inet Adr"|tr -s " " | cut -d ":" -f2 | cut -d " " -f1)
+myip=$(ip address show eth0|grep "inet\s"|tr -s " "|cut -d "/" -f1|cut -d " " -f3)
 
 # Konfigurationsvorlage für Apache vhost-Konfiguration
 vhtemplate=$(getconfvalue VhTemplate)
@@ -54,12 +54,12 @@ hosterurl=$(getconfvalue HosterUrl)
 
 # Verzeichnis der vhosts
 vhostdir=$(getconfvalue VhostDir)/$vhuser/sites
-docroot="$vhostdir/sites/$domain/htdocs"
-cgidir="$vhostdir/sites/$domain/cgi-bin"
+docroot="$vhostdir/$fqdn/htdocs"
+cgidir="$vhostdir/$fqdn/cgi-bin"
 
 # Testen, ob der vhost bereits angelegt ist.
 if [[ -d $docroot ]]; then
-    echo "Der vhost $domain existiert bereits."
+    echo "Der vhost $fqdn existiert bereits."
     exit
 fi
 
@@ -69,32 +69,32 @@ if [[ ! -d $vhostdir ]]; then
 fi
 
 # Erzeugen eine Apache Konfigurationsdatei
-cp $vhtemplate $vhconfdir/$domain.conf
+cp $vhtemplate $vhconfdir/$fqdn.conf
 
 # Anpassen der VHost Konfiguration
 path="$vhconfdir"
-file="$domain.conf"
+file="$fqdn.conf"
 string="username%$vhuser"
 changevalues $path $file "$string"
-string="dummy-host.example.com%$domain"
+string="dummy-host.example.com%$fqdn"
 changevalues $path $file "$string"
     
 # Serververzeichnisse anlegen
 mkdir -p $docroot
-mkdir -p $vhostdir/$domain/webalizer
+mkdir -p $vhostdir/$fqdn/webalizer
 mkdir -p $cgidir
-mkdir -p $vhostdir/$domain/wrapper
+mkdir -p $vhostdir/$fqdn/wrapper
 cp /etc/rootpack/templates/apache2/favicon.ico $docroot/
 
 # .htaccess-Datei fuer Webalizer kopieren und anpassen
-cp /etc/rootpack/templates/webalizer/.htaccess $vhostdir/$domain/webalizer/
-cp -r /etc/rootpack/templates/webalizer/flags/ $vhostdir/$domain/webalizer/
+cp /etc/rootpack/templates/webalizer/.htaccess $vhostdir/$fqdn/webalizer/
+cp -r /etc/rootpack/templates/webalizer/flags/ $vhostdir/$fqdn/webalizer/
 
-path="$vhostdir/$domain/webalizer"
+path="$vhostdir/$fqdn/webalizer"
 file=".htaccess"
 string="username%$vhuser"
 changevalues $path $file "$string"
-string="dummy-host.example.com%$domain"
+string="dummy-host.example.com%$fqdn"
 changevalues $path $file "$string"
 
 # Anlegen einer index.Datei zu Testzwecken
@@ -104,7 +104,7 @@ echo "<!-- ... andere Angaben im Dateikopf ... -->" >> $docroot/index.html
 echo "</head>" >> $docroot/index.html
 echo "<html><body>" >> $docroot/index.html
 echo "<hr>" >> $docroot/index.html
-echo "<h2><div align=center>Hier entsteht die Internetseite $domain</div></h2>" >> $docroot/index.html
+echo "<h2><div align=center>Hier entsteht die Internetseite $fqdn</div></h2>" >> $docroot/index.html
 echo "<hr>" >> $docroot/index.html
 echo "<font size=-1>Powered by <a href="http://$hosterurl">$hoster<a></font>" >> $docroot/index.html
 echo "</body></html>" >> $docroot/index.html
@@ -112,39 +112,37 @@ echo "</body></html>" >> $docroot/index.html
 # Wenn vorhanden php-cgi5 php.ini ins wrapper Verzeichnis kopieren
 fphpini="/etc/php5/fastcgi/php.ini"
 if [[ -f $fphpini ]];then
-    cp $fphpini $vhostdir/$domain/wrapper
+    cp $fphpini $vhostdir/$fqdn/wrapper
 fi
     
 # PHP-FCGIDWrapper-Script erzeugen
-echo '#!/bin/bash' >> $vhostdir/$domain/wrapper/fcgid-wrapper
-echo "# Kleines PHP-FCGI Wrapper-Script fuer die Kombination fcgid/suexec/php" >> $vhostdir/$domain/wrapper/fcgid-wrapper
-echo "export PHPRC=\"$vhostdir/$domain/wrapper/\"" >> $vhostdir/$domain/wrapper/fcgid-wrapper
-echo -e "exec /usr/bin/php-cgi5\n" >> $vhostdir/$domain/wrapper/fcgid-wrapper
+echo '#!/bin/bash' >> $vhostdir/$fqdn/wrapper/fcgid-wrapper
+echo "# Kleines PHP-FCGI Wrapper-Script fuer die Kombination fcgid/suexec/php" >> $vhostdir/$fqdn/wrapper/fcgid-wrapper
+echo "export PHPRC=\"$vhostdir/$fqdn/wrapper/\"" >> $vhostdir/$fqdn/wrapper/fcgid-wrapper
+echo -e "exec /usr/bin/php-cgi5\n" >> $vhostdir/$fqdn/wrapper/fcgid-wrapper
 
 # Script ausführbar machen
-chmod ug+x $vhostdir/$domain/wrapper/fcgid-wrapper
+chmod ug+x $vhostdir/$fqdn/wrapper/fcgid-wrapper
     
 # Anpassen der Besitzrechte an den Serververzeichnissen
 if [[ -n `a2enmod -l | grep suexec` ]]; then
-    chown -R $vhuser.users $vhostdir/$domain 
+    chown -R $vhuser.users $vhostdir/$fqdn 
     # Anpassen der VHost Konfiguration
     path="$vhconfdir"
-    file="$domain.conf"
+    file="$fqdn.conf"
     strings="wwwrun www%$vhuser users"
     changevalues $path $file "$strings"
 else
-    chown -R $vhuser.www $vhostdir/$domain 
-    find $vhostdir/$domain/ -type d -exec chmod 4775 '{}' \;
+    chown -R $vhuser.www $vhostdir/$fqdn 
+    find $vhostdir/$fqdn/ -type d -exec chmod 4775 '{}' \;
 fi
     
 # Apache neu laden
-/etc/init.d/apache2 force-reload
+systemctl reload apache2.service
 
-# Bei Bedarf DNS-Eintrag erzeugen -- Wenn ein * Eintrag vorhanden ist, wird kein neuer A-Record erzeugt.
-dnsentry=$(dig @localhost $domain +short)
+# Pruefen, ob fuer den Hostnamen bereits ein DNS A Record besteht
+dnsentry=$(dig $fqdn +short)
 
 if [[ -z $dnsentry ]]; then
-    vhostname=$(echo $domain | cut -d "." -f 1)
-    echo -e "$vhostname\t\tIN A $myip" >> /var/lib/named/master/$domain.zone
-    /etc/init.d/named restart
+    echo "Der Name dieses vHosts ist noch nicht per DNS auflösbar. Es muss ein DNS A-Record auf unserem Nameserver \"dnsmain.fspisp.de\" angelegt werden."
 fi
