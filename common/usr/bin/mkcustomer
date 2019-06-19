@@ -203,7 +203,10 @@ echo -e "-------------------">> $rootpackdir/kunden/$username-$gn.$sn.info
 vhostdir=$(getconfvalue VhostDir)
 
 # Benutzerkonto anlegen
-useradd -c "$gn $sn, $organisation" -k $rootpackdir/skel_customer -m -d "$vhostdir/$username" -s $shell $username
+useradd -c "$gn $sn, $organisation" -G hosting -k $rootpackdir/templates/skel_customer -m -d "$vhostdir/$username" -s $shell $username
+
+# Wegen chrooted-sftp via SSH muss das Home-Verzeichnis des Benutzers "root" gehoeren
+chown root.hosting "$vhostdir/$username"
 
 # Passwort erzeugen
 pass=$(pwgen -cn 8 1)
