@@ -210,7 +210,7 @@ chown root.hosting "$vhostdir/$username"
 
 # Passwort erzeugen
 pass=$(pwgen -cn 8 1)
-echo $pass | passwd --stdin $username
+echo "$username:$pass" | chpasswd
 echo -e "Bitte übermitteln Sie das Passwort: \"$pass\" an den Kunden: \"$username\"."
 echo -e "Es wird sowohl für den Zugriff auf die Webalizer-Auswertung als auch auf\nden Server allgemein benötigt."
 
