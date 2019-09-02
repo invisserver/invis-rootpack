@@ -46,6 +46,12 @@ check_tool_present() {
     fi
 }
 
+um() {
+    if [[ $1 != local ]]; then
+	umount $2
+    fi
+}
+
 
 usage() {
     echo -e "Rufen Sie allbackup mit einer der folgenden Optionen auf:\n"
@@ -141,7 +147,7 @@ while getopts ":hdmfrv" option ; do
     case $option in 
     h)
 	usage
-	umount $dasidir
+	um $targetsystem $dasidir
 	exit 0
 	;;
     d)
@@ -151,7 +157,7 @@ while getopts ":hdmfrv" option ; do
 	dbsystems=$(getconfdata $conffile "DbSys" "2")
 
 	for dbs in $dbsystems; do
-	    echo $dbs
+	    #echo $dbs
     
 	    case $dbs in
             ldap)
@@ -199,7 +205,8 @@ while getopts ":hdmfrv" option ; do
 	    echo "Sichern der Datenbankdumps nach $dasidir/datenbanken/$datum-alle-datenbanken.cpio hat nicht funktioniert! Die Quelldateien liegen noch unter $dumpdir. Bitte haendisch beheben."
 	    exit 2
 	fi
-	umount $dasidir
+	um $targetsystem $dasidir
+
 	;;
     m)
 	## Sicherung aller Maildirs
@@ -207,7 +214,8 @@ while getopts ":hdmfrv" option ; do
 	mailhome=$(getconfdata $conffile "MailHome" "2")
 	# Synchronisation mit rsync, im Original gelöschte Dateien werden auch in der Sicherung geloescht
 	rsync --bwlimit=500 --temp-dir=/var/tmp/rsync -rq --del $mailhome $dasidir/maildirs | tee -a $logfile
-	umount $dasidir
+	um $targetsystem $dasidir
+
 	;;
     f)
 	## Datensicherung der vhosts
@@ -258,7 +266,8 @@ while getopts ":hdmfrv" option ; do
 		diffbackup
 	    fi
 	fi
-	umount $dasidir
+	um $targetsystem $dasidir
+
 	;;
     r)
 	echo -e "Restore Modus"
@@ -272,11 +281,13 @@ while getopts ":hdmfrv" option ; do
 	echo -e "Author: Stefan Schaefer / stefan@invis-server.org"
 	echo -e "Questions: http://forum.invis-server.org"
 	echo -e "License: GPLv3"
-	umount $dasidir
+	um $targetsystem $dasidir
+
 	;;
     ?)
 	usage
-	umount $dasidir
+	um $targetsystem $dasidir
+
 	exit 1
 	;;
     esac
