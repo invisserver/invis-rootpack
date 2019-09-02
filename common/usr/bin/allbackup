@@ -205,6 +205,9 @@ while getopts ":hdmfrv" option ; do
 	    echo "Sichern der Datenbankdumps nach $dasidir/datenbanken/$datum-alle-datenbanken.cpio hat nicht funktioniert! Die Quelldateien liegen noch unter $dumpdir. Bitte haendisch beheben."
 	    exit 2
 	fi
+	# Dateien aelter 3 Tage loeschen
+	find "$dasidir/datenbanken" -maxdepth 1 -mtime +3 -type d rm {} \;
+	# ggf. umount
 	um $targetsystem $dasidir
 
 	;;
