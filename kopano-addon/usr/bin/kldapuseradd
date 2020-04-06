@@ -1,0 +1,417 @@
+#!/bin/bash
+# Script zum einfachen hinzufügen neuer (kopano)-Benutzer in den LDAP Baum
+# (c) 2012 Stefan Schäfer - FSP Computer & Netzwerke
+# License: GPLv3
+# Questions: stefan.schaefer@fsproductions.de
+
+# Globale Einstellungen
+rootpackdir="/etc/rootpack"
+rootpackconfig="$rootpackdir/rootpack.cfg"
+rootpackpws="$rootpackdir/rp-pws.cfg"
+domain="vsf-ev.de"
+oldifs="$IFS"
+# Setup-Dialog Titel
+dialogtitle="Neuen LDAP-Benutzer anlegen"
+dialogshorthelp="Cursor- ([Auf]/[Ab]) und Tabulatortaste zur Navigation, Leertaste zum auswählen und Enter-Taste zum Bestätigen verwenden."
+
+usage() {
+    echo "----------------------------------------------------------"
+    echo "Übergeben Sie diesem Script den usernamen des neuen Kunden";
+    echo
+    echo "Beispiel: \$> zldapuseradd username"
+    echo "----------------------------------------------------------"
+}
+
+# Konfigurationsparameter tauschen
+changevalues() {
+    # Arg1 = Pfad, Arg2 = Datei, Arg3 = sed String
+    cat $1/$2|sed "s%$3%g" > $1/$2.new
+    mv $1/$2.new $1/$2
+}
+
+# Funktionen
+# Werte aus Konfigurationsdatendatei extrahieren
+# $1 = Konfigurationsdatei, $2 = Parameter, $3 Wert (Feld)
+getconfdata() {
+    cat $1 |grep "$2" | cut -d ":" -f $3
+}
+
+yesno() {
+    # Argument $1 = Fragetext $2 = Dialogtitel
+    dialog --backtitle "$dialogtitle" --title "$2" --defaultno --yesno "$1" 0 0
+}
+
+textbox() {
+    # Argument $1 = Ausgabedatei $2 = Dialogtitel $3 = Exit-Label
+    if [[ -z $3 ]]; then
+        dialog --backtitle "$dialogtitle" --title "$2" --textbox "$1" 0 0
+    else
+	dialog --backtitle "$dialogtitle" --title "$2" --exit-label "$3" --textbox "$1" 0 0
+    fi
+}
+
+msgbox() {
+    # Argument $1 = Ausgabedatei $2 = Dialogtitel
+    if [[ -z $3 ]]; then
+        dialog --backtitle "$dialogtitle" --title "$2" --msgbox "$1" 8 45
+    else
+	dialog --backtitle "$dialogtitle" --title "$2" --exit-label "$3" --msgbox "$1" 8 35
+    fi
+}
+
+pgbox() {
+    dialog --sleep 2 --backtitle "$dialogtitle" --title "$windowtitle" --progressbox  "$pgsubtitle" 25 110
+}
+
+waitbox() {
+    # Fortschrittsbalken
+    i=0
+
+    { while [ $i -lt 50 ]; do
+	(( i=$i+1 ))
+	echo $(( $i * 100 / 50 ))
+	sleep 0.1
+    done } | dialog --backtitle "$dialogtitle" --title "Modul \"$1\" abgeschlossen" --gauge "Sie haben ca. 5 Sekunden Zeit um das Setup-Script mit \"Strg+C\" abzubrechen. Beim nächsten Aufruf wir es mit Modul \"$2\" fortgesetzt." 8 70 0
+}
+
+waitinfobox() {
+    # Fortschrittsbalken
+    i=0
+
+    { while [ $i -lt 70 ]; do
+	(( i=$i+1 ))
+	echo $(( $i * 100 / 70 ))
+	sleep 0.1
+    done } | dialog --backtitle "$dialogtitle" --title "$2" --gauge "$1" 8 70 0
+}
+
+tschuess() {
+    if [[ ${?} != 0 ]]; then 
+	clear
+	echo "Programm durch Benutzer abgebrochen!"
+	exit
+    fi
+}
+
+nouml() {
+    # Umlaute austauschen
+    echo "$1" |sed -e 's/Ä/Ae/g' -e 's/Ö/Oe/g' -e 's/Ü/Ue/g' -e 's/ä/ae/g' -e 's/ö/oe/g' -e 's/ü/ue/g' -e 's/ß/ss/g'
+}
+
+tolower() {
+    # Großbuschstaben ersetzen
+    echo "$1" |tr [A-Z] [a-z]
+}
+
+mailname() {
+    # Mailnamen erzeugen
+    echo "$1" | tr " " "."
+}
+
+createlogin() {
+    # $1 = gn, $2 = sn
+    firstletter=`echo "$1" |cut -d " " -f1|cut -c1`
+    #secondpart=`echo "$1" |cut -d " " -f2`
+    secondpart="$2"
+    echo $firstletter$secondpart|tr -d "-"
+}
+
+createlogin2() {
+    # $1 = gn, $2 = sn
+    firstletter=`echo "$1" |cut -d " " -f1|cut -c1-3`
+    #secondpart=`echo "$1" |cut -d " " -f2`
+    secondpart="$2"
+    echo $firstletter$secondpart|tr -d "-"
+}
+
+pass() {
+    if [[ -z $passw ]]; then
+        echo "Kein Passwort angegeben"
+        exit
+    fi
+}
+
+# LDAP-Credentials einlesen
+binddn=`getconfdata $rootpackconfig "LDAPBindDN" "2"`
+mastersecret=`getconfdata $rootpackpws "MasterSecret" "2"`
+ldaphost=`getconfdata $rootpackconfig "LDAPHost" "2"`
+basedn=`getconfdata $rootpackconfig "LDAPBaseDN" "2"`
+domain=`getconfdata $rootpackconfig "kopanoDomain" "2"`
+
+echo $binddn
+echo $mastersecret
+echo $ldaphost
+echo $basedn
+
+# Alle vorhandenen Companies ermitteln
+companies=($(ldapsearch -h $ldaphost -b "$basedn" -s subtree -S "uidNumber" -D "$binddn" -w "$mastersecret" "(objectclass=kopano-company)"|grep "ou:"|tr -d " "|cut -d ":" -f2))
+
+echo ${companies[*]}
+
+status="on"
+# Company auswaehlen
+    for company in ${companies[*]}; do
+	# Vollen Firmennamen ermitteln
+	firma=$(ldapsearch -h $ldaphost -b "$basedn" -s subtree -S "uidNumber" -D "$binddn" -w "$mastersecret" "(ou=$company)" |grep "physicalDeliveryOfficeName"|tr " " "_"|cut -d ":" -f2)
+	listitems="$listitems $company $firma $status"
+	status="off"
+    done
+
+# Auswahldialog
+dialog --backtitle "$dialogtitle" --title "Company" --radiolist "Bitte wählen Sie die Company des neuen Benutzers aus" 0 0 0 $listitems 2>$0_temp
+
+#tschuess
+if [[ ${?} != 0 ]]; then exit; fi
+
+selectedcompany=`cat $0_temp`
+
+# Ermitteln der nächsten freien Company-bezogenen UID
+uidnr=$(ldapsearch -h $ldaphost -b "ou=Benutzerverwaltung,ou=$selectedcompany,$basedn" -s subtree -S "uidNumber" -D "$binddn" -w "$mastersecret" "(uid=*)"| grep "uidNumber"| tr -d " "|cut -d ":" -f2|tail -n 1)
+
+# GID der gewaehlten Company ermitteln
+primarygid=$(ldapsearch -h $ldaphost -b "ou=Benutzerverwaltung,ou=$selectedcompany,$basedn" -s subtree -S "uidNumber" -D "$binddn" -w "$mastersecret" "(cn=*)"|grep "gidNumber:"|tr -d " "|cut -d ":" -f2|sort -u|head -n 1)
+
+if [[ -z $uidnr ]]; then
+    nextuidnr=$primarygid
+else
+    ((nextuidnr=$uidnr + 1))
+fi
+
+# Ein paar Fragen zum neuen Benutzer
+# Welche Art von Benutzer soll erstellt werden?
+listitems="1 kopano-User on 2 kopano-Ressource off 3 Mail-Dummy off"
+dialog --backtitle "$dialogtitle" --title "Benutzertyp" --radiolist "Welcher Benutzertyp soll erstellt werden" 0 0 0 $listitems 2>$0_temp
+tschuess
+usertype=`cat $0_temp`
+
+#echo $usertype
+
+if [[ $usertype != "2" ]]; then
+
+    #---# Kontaktdaten
+    IFS=$'\n'
+    ok=0
+    while (( $ok != "2" ));do
+	dialog --backtitle "$dialogtitle" --title "Voller Name" --form "$dialogshorthelp\n\n
+Geben Sie bitte den Vor- und Zunamen des neuen Benuters ein" 18 80 4 \
+	"Vorname:" 2 2 "$gn" 2 16 55 0\
+	"Nachname:" 4 2 "$sn" 4 16 55 0\
+	2>"$0_temp"
+	exitcode=${?}
+	contactvalues=($(cat "$0_temp"))
+
+	# Doch noch abbrechen
+	#tschuess
+	#echo $exitcode
+	if [[ $exitcode == "1" || $exitcode == "255" ]]; then
+	    clear
+	    echo "Programm durch Benutzer abgebrochen!"
+	    exit
+	fi
+
+	# Werte prüfen und zuordnen
+	if [[ -n ${contactvalues[0]} ]];then
+	    gn="${contactvalues[0]}"
+    	    ok=1
+	fi
+
+	if [[ -n ${contactvalues[1]} ]];then
+    	    sn="${contactvalues[1]}"
+    	    (( ok=$ok + 1 ))
+	fi
+
+#    if [[ ${contactvalues[2]} =~ ^[a-zA-Z0-9-]+([._a-zA-Z0-9.-]+)*@[a-zA-Z0-9.-]+\.([a-zA-Z]{2,4}) ]];then
+#        email="${contactvalues[2]}"
+#        (( ok=$ok + 1 ))
+#    fi
+    done
+
+    # SSH-Login ermoeglichen     -> Derzeit nicht in Planung, kann sich aber aendern
+#    yesno "Soll sich der Kunde per SSH am Server anmelden dürfen?\n" "SSH Zugang"
+#    shell=${?}
+    shell=1
+    if [[ $shell == "0" ]]; then
+	shell="/bin/bash"
+	allowlogin="ja"
+    else
+	shell="/bin/false"
+	allowlogin="nein"
+    fi
+    
+#    if [[ ! -f $rootpackdir/kunden ]]; then
+#	mkdir -p $rootpackdir/kunden
+#    fi
+    IFS=$oldifs
+
+    # Eingaben anpassen
+    fullname="$gn $sn"
+    displayname=`nouml "$fullname"`
+    lowerfullname=`tolower "$displayname"`
+    mailname=`mailname "$lowerfullname"`
+    lowergn=`tolower "$gn"`
+    lowersn=`tolower "$sn"`
+    noumllowergn=`nouml $lowergn`
+    noumllowersn=`nouml $lowersn`
+    loginname=`createlogin "$noumllowergn" "$noumllowersn"`
+    email="$mailname@$domain"
+
+    # Pruefen, ob der Benutzer bereits existiert -- 2 Runden
+    # 1te Pruefung
+    if [[ $(ldapsearch -h $ldaphost -b "$basedn" -D "$binddn" -w "$mastersecret" "(uid=$loginname)"| grep "numEntries"| tr -d " "|cut -d ":" -f2) == "1" ]]; then
+	# Wenn der einfache Loginname bereits existiert, wird dieser verlaengert.
+	loginname=`createlogin2 "$noumllowergn" "$noumllowersn"`
+    fi
+    # 2te Pruefung
+    if [[ $(ldapsearch -h $ldaphost -b "$basedn" -D "$binddn" -w "$mastersecret" "(uid=$loginname)"| grep "numEntries"| tr -d " "|cut -d ":" -f2) == "1" ]]; then
+	echo "Es kann kein eindeutiger Benutzername erzeugt werden."
+	exit
+    fi
+
+    if [[ $usertype == "1" ]];then
+	zuser="1"
+	sharedstore="0"
+	# kopano Admin?
+	yesno "Soll der neue Benutzer kopano-Administrationsrechte besitzen?" "kopano-Administrator"
+	exitcode=${?}
+	if [[ $exitcode == 0 ]];then
+	    zadmin="1"
+	else
+	    zadmin="0"
+	fi
+    else
+	zuser="0"
+	zadmin="0"
+	sharedstore="0"
+    fi
+
+else 
+    #---# Kontaktdaten
+    IFS=$'\n'
+    ok=0
+    while (( $ok != "1" ));do
+	dialog --backtitle "$dialogtitle" --title "Volle Bezeichnung" --form "$dialogshorthelp\n\n
+Geben Sie bitte die vollständige Bezeichnung der Ressource ein.\n Bei Fahrzeugen bitte das vollständige Kennzeichen angeben.\n Bei Räumen und Maschinen bitte den Standort angeben." 14 70 2 \
+	"Bezeichnung:" 2 2 "$fullname" 2 14 50 0\
+	2>"$0_temp"
+	exitcode=${?}
+	contactvalues=($(cat "$0_temp"))
+
+	# Doch noch abbrechen
+	echo $exitcode
+	#tschuess
+	if [[ $exitcode == "1" ]]; then
+	    clear
+	    echo "Programm durch Benutzer abgebrochen!"
+	    exit
+	fi
+
+	# Werte prüfen und zuordnen
+	if [[ -n ${contactvalues[0]} ]];then
+	    fullname="${contactvalues[0]}"
+    	    ok=1
+	fi
+    done
+    IFS=$oldifs
+
+    # Eingaben anpassen
+    displayname=`nouml "$fullname"`
+    lowerfullname=`tolower "$displayname"`
+    #mailname=`mailname "$lowerfullname"`
+    loginname=`echo "$lowerfullname"|tr " " "-"`
+    email="$loginname@$domain"
+
+    # Pruefen, ob der Benutzer bereits existiert
+    if [[ $(ldapsearch -h $ldaphost -b "$basedn" -D "$binddn" -w "$mastersecret" "(uid=$loginname)"| grep "numEntries"| tr -d " "|cut -d ":" -f2) == "1" ]]; then
+	echo "Der Benutzername ist bereits vergeben."
+	
+    fi
+
+    # Welche Art von Benutzer soll erstellt werden?
+    listitems="room Raum on equipment Ausrüstung off user Inaktiver_Benutzer off"
+    dialog --backtitle "$dialogtitle" --title "Ressourcentyp" --radiolist "Welcher Ressourcentyp soll erstellt werden?" 0 0 0 $listitems 2>$0_temp
+    tschuess
+    restype=$(cat $0_temp)
+
+    if [[ $restype == "equipment" ]]; then
+	IFS=$'\n'
+	ok=0
+	while (( $ok != "1" ));do
+	    dialog --backtitle "$dialogtitle" --title "Kapazität" --form "$dialogshorthelp\n\n
+Geben Sie bitte an wie oft die Ressource vorhanden ist. (0 = unbegrenzt)" 12 70 2 \
+	    "Kapazität" 2 2 "$rescap" 2 14 50 0\
+	    2>"$0_temp"
+	    exitcode=${?}
+	    rescap=$(cat "$0_temp")
+
+	    # Doch noch abbrechen
+	    #echo $exitcode
+	    if [[ $exitcode == "1" || $exitcode == "255" ]]; then
+		clear
+		echo "Programm durch Benutzer abgebrochen!"
+		exit
+	    fi
+
+	    # Werte prüfen und zuordnen
+	    if [[ -n $rescap ]];then
+		ok=1
+	    fi
+	done
+        IFS=$oldifs
+    
+    fi
+
+    sharedstore="1"
+    shell="/bin/false"
+    zadmin="0"
+    zuser="1"
+fi
+
+# Passwort erzeugen
+    userpw=`pwgen -cn 8 1`
+    ldappw=`slappasswd -s $userpw`
+
+    msgbox "Bitte notieren Sie sich das folgenden Benutzerpasswort.\n\n Passwort: $userpw" "Benutzerpasswort"
+
+# LDIF erzeugen
+tmpfile="/tmp/$loginname.ldif"
+echo "dn: uid=$loginname,ou=Benutzerverwaltung,ou=$selectedcompany,$basedn" >> $tmpfile
+echo "objectClass: top" >> $tmpfile
+echo "objectClass: posixAccount" >> $tmpfile
+echo "objectClass: person" >> $tmpfile
+echo "objectClass: inetOrgPerson" >> $tmpfile
+echo "objectClass: kopano-user" >> $tmpfile
+echo "kopanoAccount: $zuser" >> $tmpfile
+echo "kopanoAdmin: $zadmin" >> $tmpfile
+echo "kopanoSharedStoreOnly: $sharedstore" >> $tmpfile
+echo "uid: $loginname" >> $tmpfile
+echo "userPassword: $ldappw" >> $tmpfile
+echo "cn: $fullname" >> $tmpfile
+if [[ $sharedstore == "1" ]]; then
+    echo "sn: $fullname" >> $tmpfile
+    echo "kopanoResourceType: $restype" >> $tmpfile
+    if [[ $restype == "equipment" ]]; then
+	echo "kopanoResourceCapacity: $rescap" >> $tmpfile
+    fi
+else
+    echo "sn: $sn" >> $tmpfile
+fi
+echo "displayName: $displayname" >> $tmpfile
+echo "mail: $email" >> $tmpfile
+echo "loginShell: $shell" >> $tmpfile
+echo "uidNumber: $nextuidnr" >> $tmpfile
+echo "gidNumber: $primarygid" >> $tmpfile
+echo "homeDirectory: /tmp" >> $tmpfile
+
+# LDIF-Datei in LDAP-DIT einpflegen
+ldapadd -h $ldaphost -D "$binddn" -w "$mastersecret" -f $tmpfile
+
+# Ressourcen sollen Einladungen automatisch beantworten
+if [[ -n $restype ]]; then
+    kopano-cli --mr-accept yes -u $loginname
+    kopano-cli --mr-accept-conflicts no -u $loginname
+    kopano-cli --mr-accept-recurring no -u $loginname
+fi
+
+# Temp-Dateien loeschen
+rm -f $0_temp
+rm -f $tmpfile

@@ -1,0 +1,61 @@
+# Initiale LDIF fuer Multi-Company LDAP Directory
+# (c) 2018 Stefan Schaefer
+# Datei muss an eigene Umgebung angepasst werden.
+# Vor allem sind die hier verwendeten Passwort-Platzhalter
+# "secret" durch Passwort-Hashes  
+# zu ersetzen. Zur Erzeugung der Hashes ist das Tool
+# "slappaswd" zu verwenden.
+
+# Basis - Organisation
+#dn: o=organisation,c=de
+#objectClass: organization
+#o: organisation
+#description: Organisation - LDAP Base
+
+# Uebergeordneter Management Account
+#dn: uid=Admin,o=organisation,c=de
+#objectclass: top
+#objectclass: account
+#objectclass: simpleSecurityObject
+#uid: Admin
+#userPassword: {SSHA}KIw7S+qR48UfEHtdzCZrermHf0g+lu7Z
+#description: Verzeichnis Administrator Gesamtorganisation
+
+######################################################################
+
+# Basisknoten firma1
+dn: ou=firma1,o=organisation,c=de
+objectClass: top
+objectClass: organizationalUnit
+objectClass: kopano-company
+ou: firma1
+physicalDeliveryOfficeName: Organisation Firma1
+description: Basisknoten Organisation Firma1
+
+# Management Account firma1
+dn: uid=Admin,ou=firma1,o=organisation,c=de
+objectclass: top
+objectclass: account
+objectclass: simpleSecurityObject
+uid: Admin
+userPassword: {SSHA}hfhKqTZbgV7HWeE1/0OFNOChRpWANGph
+description: Verzeichnis Administrator Firma1
+
+# Basisknoten Benutzerverwaltung
+dn: ou=Benutzerverwaltung,ou=firma1,o=organisation,c=de
+objectClass: top
+objectClass: organizationalUnit
+ou: Benutzerverwaltung
+description: Basis für die Benutzerverwaltung der Firma1
+
+## Primaer-Gruppe firma1
+
+## organisation company1 Basisgruppe
+dn: cn=firma1-all,ou=Benutzerverwaltung,ou=firma1,o=organisation,c=de
+objectClass: top
+objectClass: namedObject
+objectClass: posixGroup
+gidNumber: 5000
+cn: firma1-all
+description: Alle Benutzer der Firma1
+

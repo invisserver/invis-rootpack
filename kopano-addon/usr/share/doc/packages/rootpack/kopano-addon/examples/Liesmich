@@ -1,0 +1,6 @@
+LDIF-Vorlagen zum Aufbau eines LDAP-Verzeichnisses zur Kopano-Benutzerverwaltung
+Die LDIF-Vorlagen sind Multi-Tenant faehig
+
+Verzeichnis-Wurzel und erste Firma
+    01_initial.ldif
+
