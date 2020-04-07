@@ -1,0 +1,7 @@
+# Spamassassin Signaturen aktualisieren
+0 7 * * * root /usr/bin/sa-update
+10 7 * * * root /usr/bin/sa-update --nogpg --channel spamassassin.heinlein-support.de
+15 7 * * * root /usr/bin/sa-update --nogpg --channel sa.schaal-it.net
+20 7 * * * root /usr/bin/sa-update –allowplugins –channel sa.sosdg.org –nogpg
+25 7 * * * root /usr/bin/sa-update --nogpg --channel sought.rules.yerp.org
+30 7 * * * root /usr/bin/sa-update --nogpg --channel sa.zmi.at
