@@ -11,12 +11,14 @@ objectClass: kopano-user
 uid: loginname
 cn: Vorname Nachname
 sn: Namchname
+givenName: 
 displayName: Vorname Nachname
 uidNumber: 5000
 gidNumber: 5000
 homeDirectory: /home/loginname
 userPassword: user-secret-hash
 loginShell: /bin/bash
+#mobile: ++49 1234 12345678
 mail: loginname@organisation.de
 kopanoAccount: 1
 kopanoSharedStore: 0

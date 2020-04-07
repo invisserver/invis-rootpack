@@ -395,6 +395,7 @@ if [[ $sharedstore == "1" ]]; then
 else
     echo "sn: $sn" >> $tmpfile
 fi
+echo "givenName: $gn" >> $tmpfile
 echo "displayName: $displayname" >> $tmpfile
 echo "mail: $email" >> $tmpfile
 echo "loginShell: $shell" >> $tmpfile
