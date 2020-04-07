@@ -1,13 +1,39 @@
 ## FSP - Eigene Konfigurationsergaenzungen
-
-# Maximale Nachrichtengroesse auf 20MB setzen
-message_size_limit = 30960000
-
 # Standard-Datenbankformat auf Typ btree setzen
 default_database_type = btree
 
-## FSP Mailman Tables vorübergehend deaktiviert
-# virtual maps
+# Hostname
+myhostname = mail.example.com
+# Optional, da virtual domain basiertes Setup
+mydomain = example.com
+
+# Ziel der Mailzustellung
+# Server nimmt zunächst nur mails an, die an den lokalen Hostnamen gerichtet sind.
+# Alles andere wird über virtuelle Domains geloest.
+myorigin = $myhostname
+
+# Auf welchen Netzwerkschnittstellen werden Mails angenommen
+inet_interfaces = all
+
+# Postfix ist finales Ziel der Zustellung fuer:
+# mydestination = $myhostname, localhost.$mydomain, localhost, $mydomain
+mydestination = $myhostname, localhost.$mydomain, localhost
+
+# Blindes Vertrauen nur gegenueber sich selbst
+mynetworks_style = host
+
+## BCC -> Mailarchiv - optional
+#recipient_bcc_maps = btree:/etc/postfix/alldirections_bcc
+#sender_bcc_maps = btree:/etc/postfix/alldirections_bcc
+
+# Relay Domains 
+relay_domains = btree:/etc/postfix/relay
+transport_maps = btree:/etc/postfix/transport, $relay_domains
+
+# Maximale Nachrichtengroesse auf 30MB setzen
+message_size_limit = 30960000
+
+## virtual maps (Aliase / Weiterleitungen)
 virtual_alias_maps = btree:/etc/postfix/virtual
 #virtual_alias_domains = btree:/etc/postfix/virtual_domains
 
@@ -15,3 +41,6 @@ virtual_alias_maps = btree:/etc/postfix/virtual
 # kann alternativ auch in der master.cf als Option fuer smtp eingetragen werden.
 # Sinnvoll bei mehreren IP-Adressen auf denen der Mail-Empfang unterschiedlich gehandhabt wird.
 smtpd_proxy_filter = localhost:10024
+
+# IPv4 / IPv6
+inet_protocols = ipv4

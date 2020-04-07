@@ -1,0 +1,24 @@
+# LDIF User-Liste fuer Multicompany LDAP-Server
+# (c) 2018-2020 Stefan Schäfer
+
+## Benutzer Firma1
+dn: uid=loginname,ou=Benutzerverwaltung,ou=firma1,o=organisation,c=de
+objectClass: top
+objectClass: posixAccount
+objectClass: person
+objectClass: inetOrgPerson
+objectClass: kopano-user
+uid: loginname
+cn: Vorname Nachname
+sn: Namchname
+displayName: Vorname Nachname
+uidNumber: 5000
+gidNumber: 5000
+homeDirectory: /home/loginname
+userPassword: user-secret-hash
+loginShell: /bin/bash
+mail: loginname@organisation.de
+kopanoAccount: 1
+kopanoSharedStore: 0
+kopanoAdmin: 0
+
