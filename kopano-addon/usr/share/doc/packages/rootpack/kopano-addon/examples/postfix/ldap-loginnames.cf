@@ -1,0 +1,9 @@
+server_host = localhost
+search_base = o=organisation,c=de
+version = 3
+bind = yes
+bind_dn = cn=manager,o=organisation,c=de
+bind_pw = master-secret
+scope = sub
+query_filter = (&(objectClass=posixAccount)(uid=%s))
+result_attribute = mail
