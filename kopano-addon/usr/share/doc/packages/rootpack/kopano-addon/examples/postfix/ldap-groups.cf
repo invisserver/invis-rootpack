@@ -1,0 +1,6 @@
+server_host = localhost
+search_base = o=organisation,c=de
+version = 3
+scope = sub
+query_filter = (&(objectclass=kopano-group)(mail=%s))
+result_attribute = memberUid

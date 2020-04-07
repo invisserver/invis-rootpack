@@ -1,0 +1,8 @@
+## Kopano
+# Domains benennen
+virtual_mailbox_domains = example.com, example.org, example.net
+
+# Kopano Benutzer in Mailrouting integrieren
+virtual_mailbox_maps = ldap:/etc/postfix/ldap-users.cf
+virtual_alias_maps = ldap:/etc/postfix/ldap-aliases.cf, ldap:/etc/postfix/ldap-groups.cf, ldap:/etc/postfix/ldap-groups-expand.cf
+virtual_transport = lmtp:unix:/var/spool/kopano/dagent.sock
