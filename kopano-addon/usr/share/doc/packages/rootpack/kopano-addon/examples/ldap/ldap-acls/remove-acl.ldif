@@ -1,0 +1,8 @@
+# Einfache LDIF-Datei zum Entfernen einer ACL-Regel
+# Die Ziffer innerhalb der geschweiften Klammer in der letzten
+# Zeile muss exakt die Nummer der zu löschenden ACL sein.
+
+dn: olcDatabase={1}mdb,cn=config
+changetype: modify
+delete: olcAccess
+olcAccess: {3}

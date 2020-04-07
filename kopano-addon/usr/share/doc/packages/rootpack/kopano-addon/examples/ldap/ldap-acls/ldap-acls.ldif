@@ -1,0 +1,53 @@
+# ACL Regelsatz fuer einen Verzeichnisbaum zur
+# Kopano Multitenant Benutzerverwaltung.
+
+# Passwort Attribute schuetzen
+dn: olcDatabase={1}mdb,cn=config
+add: olcAccess
+olcAccess: {1}to attrs=userPassword,userPKCS12 
+ by self write 
+ by dn="uid=admin,o=organisation,c=de" write 
+ by * auth
+-
+# ShadowLastChange Attribut schuetzen
+# vermutlich ueberfluessig
+add: olcAccess
+olcAccess: {2}to attrs=shadowLastChange 
+ by self write 
+ by dn="uid=admin,o=organisation,c=de" write 
+ by * read
+-
+# Zugriff auf eigenes Benutzerobjekt schreibend, alle anderen lesend
+add: olcAccess
+olcAccess: {3}to dn.regex="^uid=([^,]+),ou=Benutzerverwaltung,ou=([^,]+),o=organis
+ ation,c=de$" 
+ by dn.exact,expand="uid=$1,ou=Benutzerverwaltung,ou=$2,o=organisation,c=de" 
+ write 
+ by dn.exact,expand="uid=admin,ou=$2,o=organisation,c=de" 
+ write 
+ by dn.exact="uid=admin,o=organisation,c=de" write 
+ by * read
+-
+# Zugriff auf eigenes Benutzerobjekt schreibend, alle anderen lesend
+add: olcAccess
+olcAccess: {4}to dn.regex="^cn=([^,]+),ou=Benutzerverwaltung,ou=([^,]+),o=organis
+ ation,c=de$" 
+ by dn.exact,expand="uid=admin,ou=$2,o=organisation,c=de" 
+ write 
+ by dn.exact="uid=admin,o=organisation,c=de" write 
+ by * read
+-
+# Zugriff fuer Firmenadmins regeln
+# Jede "Firma" hat einen eigenen Admin, der alle Objekte
+# des Firmenteilzweiges bearbeiten darf.
+add: olcAccess
+olcAccess: {5}to dn.regex="^ou=([^,]+),o=organisation,c=de$" 
+ by dn.exact,expand="uid=admin,ou=$1,o=organisation,c=de" write 
+ by dn.exact="uid=admin,o=organisation,c=de" write 
+ by * read
+-
+# Organisationsadmin darf alles bearbeiten
+add: olcAccess
+olcAccess: {6}to dn.sub="o=organisation,c=de" 
+ by dn.exact="uid=admin,o=organisation,c=de" write 
+ by * read 
