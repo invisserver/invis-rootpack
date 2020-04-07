@@ -1,6 +1,9 @@
 server_host = localhost
 search_base = o=organisation,c=de
 version = 3
+bind = yes
+bind_dn = cn=manager,o=organisation,c=de
+bind_pw = manager-secret
 scope = sub
 query_filter = (&(objectclass=kopano-user)(uid=%s))
 result_attribute = mail

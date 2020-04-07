@@ -1,0 +1,23 @@
+## SMTP-Auth mit SASL -- FSP -- Stefan Schaefer -- 15.12.2010
+smtpd_sasl_path = smtpd
+
+# Auf yes setzen, wenn es mit alten Outlook Versionen Probleme mit 
+# SMTP-AUTH gibt
+broken_sasl_auth_clients = yes
+
+## SMTP-Auth per SASL fuer eingehende Mails -- Erlaubtes Relaying
+smtpd_sasl_auth_enable = yes
+
+# Bei TLS gesicherten Verbindungen wird Klartext-Login erlaubt
+smtpd_sasl_tls_security_options = noanonymous
+
+# Anonymen- und Klartext-Login untersagen
+smtpd_sasl_security_options = noanonymous, noplaintext
+
+# SASL-Auth nur fuer TLS gesicherte Verbindungen zulassen
+smtpd_tls_auth_only = yes
+
+# Username der SASL Authentifizierung wird im Mail-Header abgelegt.
+## Stefan, erst mal als Notloesung, damit SpamAssassin keine Blacklist 
+## Checks macht.
+smtpd_sasl_authenticated_header = yes

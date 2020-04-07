@@ -30,6 +30,9 @@ mynetworks_style = host
 relay_domains = btree:/etc/postfix/relay
 transport_maps = btree:/etc/postfix/transport, $relay_domains
 
+# Benachrichtigungsdienst deaktivieren
+biff = no
+
 # Maximale Nachrichtengroesse auf 30MB setzen
 message_size_limit = 30960000
 

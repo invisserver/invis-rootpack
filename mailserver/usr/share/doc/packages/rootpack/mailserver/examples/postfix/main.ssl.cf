@@ -22,8 +22,8 @@ lmtp_tls_mandatory_protocols = !SSLv2, !SSLv3
 smtpd_tls_ciphers = medium
 smtp_tls_ciphers = medium
 
-smtpd_tls_dh1024_param_file = /etc/postfix/dh_2048.pem
-smtpd_tls_dh512_param_file = /etc/postfix/dh_512.pem
+smtpd_tls_dh1024_param_file = /etc/rootpack/dh/dh.pem
+smtpd_tls_dh512_param_file = /etc/rootpack/dh/dh_512.pem
 
 # Postfix ≥ 2.6 für elliptic curve cryptography:
 smtpd_tls_eecdh_grade = strong
