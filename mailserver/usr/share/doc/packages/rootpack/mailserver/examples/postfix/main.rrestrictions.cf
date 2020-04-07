@@ -1,0 +1,39 @@
+# Gute Idee Herr Heinlein
+unverified_recipient_reject_code = 577
+
+# Generell ein Helo einfordern.
+# Wer nicht freundlich Hallo sagt, kann gehen ;-)
+smtpd_helo_required = yes
+
+smtpd_recipient_restrictions =  
+                        # Whitelisting für Role-Accounts -- eigene Access-Table
+                                check_recipient_access btree:/etc/postfix/recipient_access,
+                        # Der Client muss Return-Codes vor dem nächsten SMTP-Kommando abwarten
+                                reject_unauth_pipelining,
+                        # Prüfen, ob der Absender in der Access-Table gelistet ist
+                                check_sender_access btree:/etc/postfix/access,
+                        # Prüfen, ob Absender- und Empfänger-Domains existieren
+                                reject_unknown_sender_domain,
+                                reject_unknown_recipient_domain,
+                        # Mails werden geblockt, wenn Sender- oder Empfänger-Adresse keine FQDNs sind -- keine DNS Prüfung.
+                                reject_non_fqdn_sender,
+                                reject_non_fqdn_recipient,
+                        # Mails von authentifizierten Clients annehmen
+                                permit_sasl_authenticated,
+                                permit_tls_clientcerts,
+                        # Mails aus unserem Netz erlauben (Ist meiner Meinung nach auf einem Root-Server Quatsch)
+                                permit_mynetworks,
+                        # Testen, ob der Empfaenger existiert
+                                reject_unverified_recipient,
+                        # Ein bisschen DNS-Check
+                                reject_unknown_client_hostname,
+                        # Jetzt noch ein bisschen Blacklisting
+                                reject_rbl_client dnsbl.inps.de,
+                                reject_rbl_client ix.dnsbl.manitu.net,
+                                reject_rbl_client zen.spamhaus.org,
+                                reject_rbl_client wormrbl.imp.ch
+                        # Mails Akzeptieren für die wir Backup-MX sind
+                                permit_mx_backup,
+                        # Unerlaubtes Relayen unterbinden
+                                reject_unauth_destination
+

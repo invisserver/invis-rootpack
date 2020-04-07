@@ -1,0 +1,17 @@
+## FSP - Eigene Konfigurationsergaenzungen
+
+# Maximale Nachrichtengroesse auf 20MB setzen
+message_size_limit = 30960000
+
+# Standard-Datenbankformat auf Typ btree setzen
+default_database_type = btree
+
+## FSP Mailman Tables vorübergehend deaktiviert
+# virtual maps
+virtual_alias_maps = btree:/etc/postfix/virtual
+#virtual_alias_domains = btree:/etc/postfix/virtual_domains
+
+# Filter-Proxy global aktivieren
+# kann alternativ auch in der master.cf als Option fuer smtp eingetragen werden.
+# Sinnvoll bei mehreren IP-Adressen auf denen der Mail-Empfang unterschiedlich gehandhabt wird.
+smtpd_proxy_filter = localhost:10024
