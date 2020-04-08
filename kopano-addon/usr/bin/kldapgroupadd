@@ -1,0 +1,248 @@
+#!/bin/bash
+# Script zum einfachen hinzufügen neuer (kopano)-Benutzer in den LDAP Baum
+# (c) 2012 Stefan Schäfer - FSP Computer & Netzwerke
+# License: GPLv3
+# Questions: stefan.schaefer@fsproductions.de
+
+# Globale Einstellungen
+rootpackdir="/etc/rootpack"
+rootpackconfig="$rootpackdir/rootpack.cfg"
+rootpackpws="$rootpackdir/rp-pws.cfg"
+domain="vsf-ev.de"
+oldifs="$IFS"
+# Setup-Dialog Titel
+dialogtitle="Neue LDAP-Gruppe anlegen"
+dialogshorthelp="Cursor- ([Auf]/[Ab]) und Tabulatortaste zur Navigation, Leertaste zum auswählen und Enter-Taste zum Bestätigen verwenden."
+
+usage() {
+    echo "----------------------------------------------------------"
+    echo "Übergeben Sie diesem Script den usernamen des neuen Kunden";
+    echo
+    echo "Beispiel: \$> kldagroupadd groupname"
+    echo "----------------------------------------------------------"
+}
+
+# Konfigurationsparameter tauschen
+changevalues() {
+    # Arg1 = Pfad, Arg2 = Datei, Arg3 = sed String
+    cat $1/$2|sed "s%$3%g" > $1/$2.new
+    mv $1/$2.new $1/$2
+}
+
+# Funktionen
+# Werte aus Konfigurationsdatendatei extrahieren
+# $1 = Konfigurationsdatei, $2 = Parameter, $3 Wert (Feld)
+getconfdata() {
+    cat $1 |grep "$2" | cut -d ":" -f $3
+}
+
+yesno() {
+    # Argument $1 = Fragetext $2 = Dialogtitel
+    dialog --backtitle "$dialogtitle" --title "$2" --defaultno --yesno "$1" 0 0
+}
+
+textbox() {
+    # Argument $1 = Ausgabedatei $2 = Dialogtitel $3 = Exit-Label
+    if [[ -z $3 ]]; then
+        dialog --backtitle "$dialogtitle" --title "$2" --textbox "$1" 0 0
+    else
+	dialog --backtitle "$dialogtitle" --title "$2" --exit-label "$3" --textbox "$1" 0 0
+    fi
+}
+
+msgbox() {
+    # Argument $1 = Ausgabedatei $2 = Dialogtitel
+    if [[ -z $3 ]]; then
+        dialog --backtitle "$dialogtitle" --title "$2" --msgbox "$1" 8 45
+    else
+	dialog --backtitle "$dialogtitle" --title "$2" --exit-label "$3" --msgbox "$1" 8 35
+    fi
+}
+
+pgbox() {
+    dialog --sleep 2 --backtitle "$dialogtitle" --title "$windowtitle" --progressbox  "$pgsubtitle" 25 110
+}
+
+waitbox() {
+    # Fortschrittsbalken
+    i=0
+
+    { while [ $i -lt 50 ]; do
+	(( i=$i+1 ))
+	echo $(( $i * 100 / 50 ))
+	sleep 0.1
+    done } | dialog --backtitle "$dialogtitle" --title "Modul \"$1\" abgeschlossen" --gauge "Sie haben ca. 5 Sekunden Zeit um das Setup-Script mit \"Strg+C\" abzubrechen. Beim nächsten Aufruf wir es mit Modul \"$2\" fortgesetzt." 8 70 0
+}
+
+waitinfobox() {
+    # Fortschrittsbalken
+    i=0
+
+    { while [ $i -lt 70 ]; do
+	(( i=$i+1 ))
+	echo $(( $i * 100 / 70 ))
+	sleep 0.1
+    done } | dialog --backtitle "$dialogtitle" --title "$2" --gauge "$1" 8 70 0
+}
+
+tschuess() {
+    if [[ ${?} != 0 ]]; then 
+	clear
+	echo "Programm durch Benutzer abgebrochen!"
+	exit
+    fi
+}
+
+nouml() {
+    # Umlaute austauschen
+    echo "$1" |sed -e 's/Ä/Ae/g' -e 's/Ö/Oe/g' -e 's/Ü/Ue/g' -e 's/ä/ae/g' -e 's/ö/oe/g' -e 's/ü/ue/g' -e 's/ß/ss/g'
+}
+
+nospace() {
+    # Leerzeichen ersetzen
+    echo "$1" |tr " " "-"
+}
+
+tolower() {
+    # Großbuschstaben ersetzen
+    echo "$1" |tr [A-Z] [a-z]
+}
+
+mailname() {
+    # Mailnamen erzeugen
+    echo "$1" | tr " " "."
+}
+
+# LDAP-Credentials einlesen
+binddn=`getconfdata $rootpackconfig "LDAPBindDN" "2"`
+mastersecret=`getconfdata $rootpackpws "MasterSecret" "2"`
+ldaphost=`getconfdata $rootpackconfig "LDAPHost" "2"`
+basedn=`getconfdata $rootpackconfig "LDAPBaseDN" "2"`
+domain=`getconfdata $rootpackconfig "kopanoDomain" "2"`
+
+# Check if an groupname is given
+if [[ -z $1 ]]; then
+    usage
+    exit
+else
+    groupname="$1"
+fi
+
+# Attribute anpassen
+displayname=`nouml "$groupname"`
+cn1=`tolower "$groupname"`
+cn2=`nouml "$cn1"`
+cn=`nospace "$cn2"`
+email="$cn@$domain"
+
+# Pruefen, ob der Benutzer bereits existiert -- 2 Runden
+# 1te Pruefung
+if [[ `ldapsearch -h $ldaphost -b "$basedn" -D "$binddn" -w "$mastersecret" "(cn=$cn)"| grep "numEntries"| tr -d " "|cut -d ":" -f2` == "1" ]]; then
+    # Wenn der einfache Loginname bereits existiert, wird dieser verlaengert.
+    echo "Die Gruppe \"$groupname\" existiert bereits"
+    exit
+fi
+
+# Alle vorhandenen Companies ermitteln
+companies=(`ldapsearch -h $ldaphost -b "$basedn" -s subtree -S "uidNumber" -D "$binddn" -w "$mastersecret" "(objectclass=kopano-company)"|grep "ou:"|tr -d " "|cut -d ":" -f2`)
+
+echo ${companies[*]}
+
+status="on"
+# Company auswaehlen
+for company in ${companies[*]}; do
+    # Vollen Firmennamen ermitteln
+    firma=`ldapsearch -h $ldaphost -b "$basedn" -s subtree -S "uidNumber" -D "$binddn" -w "$mastersecret" "(ou=$company)" |grep "physicalDeliveryOfficeName"|tr " " "_"|cut -d ":" -f2`
+    listitems="$listitems $company $firma $status"
+    status="off"
+done
+
+# Auswahldialog
+dialog --backtitle "$dialogtitle" --title "Company" --radiolist "Bitte wählen Sie die Company der neuen Gruppe aus" 0 0 0 $listitems 2>$0_temp
+
+#tschuess
+if [[ ${?} != 0 ]]; then exit; fi
+
+selectedcompany=`cat $0_temp`
+
+# Ermitteln der nächsten freien Company-bezogenen GID
+gidnr=`ldapsearch -h $ldaphost -b "ou=Benutzerverwaltung,ou=$selectedcompany,$basedn" -s subtree -S "gidNumber" -D "$binddn" -w "$mastersecret" "(cn=*)"| grep "gidNumber"| tr -d " "|cut -d ":" -f2|tail -n 1`
+
+# GID der gewaehlten Company ermitteln
+primarygid=`ldapsearch -h $ldaphost -b "ou=Benutzerverwaltung,ou=$selectedcompany,$basedn" -s subtree -S "uidNumber" -D "$binddn" -w "$mastersecret" "(cn=*)"|grep "gidNumber:"|tr -d " "|cut -d ":" -f2|sort -u|head -n 1`
+
+if [[ -z $gidnr ]]; then
+    nextgidnr=$primarygid
+else
+    ((nextgidnr=$gidnr + 1))
+fi
+
+#echo $primarygid
+#echo $gidnr
+#echo $nextgidnr
+
+# Ein paar Fragen zum neuen Benutzer
+# Welche Art von Benutzer soll erstellt werden?
+listitems="1 Sicherheitsgruppe on 2 Verteilergruppe off"
+dialog --backtitle "$dialogtitle" --title "Gruppentyp" --radiolist "Welcher Gruppentyp soll erstellt werden?" 0 0 0 $listitems 2>$0_temp
+tschuess
+grouptype=`cat $0_temp`
+
+#echo $grouptype
+
+#---# Beschreibung erfragen
+IFS=$'\n'
+ok=0
+while (( $ok != "1" ));do
+    dialog --backtitle "$dialogtitle" --title "Beschreibungstext" --form "$dialogshorthelp\n\n
+Geben Sie bitte eine Beschreibung zur neuen Gruppe ein." 12 70 2 \
+    "Beschreibung:" 2 2 "$description" 2 16 48 0\
+    2>"$0_temp"
+    exitcode=${?}
+    contactvalues=(`cat "$0_temp"`)
+
+    # Doch noch abbrechen
+    #echo $exitcode
+    #tschuess
+    if [[ $exitcode == "1" ]]; then
+	clear
+	echo "Programm durch Benutzer abgebrochen!"
+	exit
+    fi
+
+    # Werte prüfen und zuordnen
+    if [[ -n ${contactvalues[0]} ]];then
+	description="${contactvalues[0]}"
+    	ok=1
+    fi
+done
+IFS=$oldifs
+
+#echo $displayname
+
+# LDIF erzeugen
+tmpfile="/tmp/$groupname.ldif"
+echo "dn: cn=$cn,ou=Benutzerverwaltung,ou=$selectedcompany,$basedn" >> $tmpfile
+echo "objectClass: top" >> $tmpfile
+echo "objectClass: posixGroup" >> $tmpfile
+echo "objectClass: namedObject" >> $tmpfile
+echo "objectClass: kopano-group" >> $tmpfile
+echo "gidNumber: $nextgidnr" >> $tmpfile
+echo "cn: $cn" >> $tmpfile
+echo "description: $description" >> $tmpfile
+echo "mail: $email" >> $tmpfile
+
+if [[ $grouptype == "1" ]]; then
+    # Sicherheitsgruppe kann zur Vergabe von Rechten und Mailversand genutzt werden
+    echo "kopanoSecurityGroup: 1" >> $tmpfile
+else
+    # Reine Verteilergruppe, kann nicht zur Vergabe von Rechten genutzt werden
+    echo "kopanoSecurityGroup: 0" >> $tmpfile
+fi
+
+# LDIF-Datei in LDAP-DIT einpflegen
+ldapadd -h $ldaphost -D "$binddn" -w "$mastersecret" -f $tmpfile
+
+# Temp-Dateien loeschen
+rm -f $0_temp
+rm -f $tmpfile

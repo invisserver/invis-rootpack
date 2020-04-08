@@ -1,0 +1,67 @@
+#!/bin/bash
+# Script zum einfachen aendern der Passwoerter der 
+# (kopano)-Benutzer im LDAP Baum
+# (c) 2012 Stefan Schäfer - FSP Computer & Netzwerke
+# License: GPLv3
+# Questions: stefan.schaefer@fsproductions.de
+
+# Globale Einstellungen
+rootpackdir="/etc/rootpack"
+rootpackconfig="$rootpackdir/rootpack.cfg"
+rootpackpws="$rootpackdir/rp-pws.cfg"
+
+# Funktionen
+# Werte aus Konfigurationsdatendatei extrahieren
+# $1 = Konfigurationsdatei, $2 = Parameter, $3 Wert (Feld)
+getconfdata() {
+    cat $1 |grep "$2" | cut -d ":" -f $3
+}
+
+
+usage() {
+    echo "----------------------------------------------------------"
+    echo "Übergeben Sie diesem Script den usernamen des neuen Kunden";
+    echo
+    echo "Beispiel: \$> kldappasswd groupname"
+    echo "----------------------------------------------------------"
+}
+
+# LDAP-Credentials einlesen
+binddn=`getconfdata $rootpackconfig "LDAPBindDN" "2"`
+mastersecret=`getconfdata $rootpackpws "MasterSecret" "2"`
+ldaphost=`getconfdata $rootpackconfig "LDAPHost" "2"`
+basedn=`getconfdata $rootpackconfig "LDAPBaseDN" "2"`
+
+# Benutzer uebernehmen
+if [[ -z $1 ]]; then
+    usage
+    exit
+fi
+group="$1"
+
+# DN und vollen Namen des Benutzers ermitteln
+groupdn=`ldapsearch -h $ldaphost -b "$basedn" -s subtree -D "$binddn" -w "$mastersecret" "(cn=$group)"|grep "dn: "|cut -d " " -f2`
+if [[ -z $groupdn ]];then
+    echo "Die Gruppe \"$group\" existiert nicht."
+    exit
+fi
+description=`ldapsearch -h $ldaphost -b "$basedn" -s subtree -D "$binddn" -w "$mastersecret" "(cn=$group)"|grep "description:"|cut -d " " -f2-`
+
+# ggf. base64 decodieren
+if [[ `echo $description| grep "==$"` ]];then
+    description=`echo $description | base64 --decode`
+fi
+
+# Sicher?
+read -p "Sind Sie sicher, dass Sie die Gruppe \"$group\" ($description) löschen wollen [j/N]? " answer
+
+if [[ -z $answer || $answer != "j" ]]; then
+    echo "Gruppe wird nicht gelöscht. Programm wird beendet."
+    exit
+fi
+
+# Passwort aendern
+ldapdelete -h localhost -D "$binddn" -w $mastersecret $groupdn
+
+# ausgabe
+echo -e "Gruppe \"$group\" ($description) wurde gelöscht."
