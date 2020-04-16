@@ -22,7 +22,7 @@ usage() {
     echo "----------------------------------------------------------"
     echo "Übergeben Sie diesem Script den usernamen des neuen Kunden";
     echo
-    echo "Beispiel: \$> kldappasswd groupname"
+    echo "Beispiel: \$> kldapgroupdel groupname"
     echo "----------------------------------------------------------"
 }
 

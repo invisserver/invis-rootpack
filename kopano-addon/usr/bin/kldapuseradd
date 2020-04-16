@@ -18,7 +18,7 @@ usage() {
     echo "----------------------------------------------------------"
     echo "Übergeben Sie diesem Script den usernamen des neuen Kunden";
     echo
-    echo "Beispiel: \$> zldapuseradd username"
+    echo "Beispiel: \$> kldapuseradd username"
     echo "----------------------------------------------------------"
 }
 
@@ -144,7 +144,7 @@ echo $ldaphost
 echo $basedn
 
 # Alle vorhandenen Companies ermitteln
-companies=($(ldapsearch -h $ldaphost -b "$basedn" -s subtree -S "uidNumber" -D "$binddn" -w "$mastersecret" "(objectclass=kopano-company)"|grep "ou:"|tr -d " "|cut -d ":" -f2))
+companies=(`ldapsearch -h $ldaphost -b "$basedn" -s subtree -S "uidNumber" -D "$binddn" -w "$mastersecret" "(objectclass=kopano-company)"|grep "ou:"|tr -d " "|cut -d ":" -f2`)
 
 echo ${companies[*]}
 
@@ -152,7 +152,7 @@ status="on"
 # Company auswaehlen
     for company in ${companies[*]}; do
 	# Vollen Firmennamen ermitteln
-	firma=$(ldapsearch -h $ldaphost -b "$basedn" -s subtree -S "uidNumber" -D "$binddn" -w "$mastersecret" "(ou=$company)" |grep "physicalDeliveryOfficeName"|tr " " "_"|cut -d ":" -f2)
+	firma=`ldapsearch -h $ldaphost -b "$basedn" -s subtree -S "uidNumber" -D "$binddn" -w "$mastersecret" "(ou=$company)" |grep "physicalDeliveryOfficeName"|tr " " "_"|cut -d ":" -f2`
 	listitems="$listitems $company $firma $status"
 	status="off"
     done
@@ -166,10 +166,10 @@ if [[ ${?} != 0 ]]; then exit; fi
 selectedcompany=`cat $0_temp`
 
 # Ermitteln der nächsten freien Company-bezogenen UID
-uidnr=$(ldapsearch -h $ldaphost -b "ou=Benutzerverwaltung,ou=$selectedcompany,$basedn" -s subtree -S "uidNumber" -D "$binddn" -w "$mastersecret" "(uid=*)"| grep "uidNumber"| tr -d " "|cut -d ":" -f2|tail -n 1)
+uidnr=`ldapsearch -h $ldaphost -b "ou=Benutzerverwaltung,ou=$selectedcompany,$basedn" -s subtree -S "uidNumber" -D "$binddn" -w "$mastersecret" "(uid=*)"| grep "uidNumber"| tr -d " "|cut -d ":" -f2|tail -n 1`
 
 # GID der gewaehlten Company ermitteln
-primarygid=$(ldapsearch -h $ldaphost -b "ou=Benutzerverwaltung,ou=$selectedcompany,$basedn" -s subtree -S "uidNumber" -D "$binddn" -w "$mastersecret" "(cn=*)"|grep "gidNumber:"|tr -d " "|cut -d ":" -f2|sort -u|head -n 1)
+primarygid=`ldapsearch -h $ldaphost -b "ou=Benutzerverwaltung,ou=$selectedcompany,$basedn" -s subtree -S "uidNumber" -D "$binddn" -w "$mastersecret" "(cn=*)"|grep "gidNumber:"|tr -d " "|cut -d ":" -f2|sort -u|head -n 1`
 
 if [[ -z $uidnr ]]; then
     nextuidnr=$primarygid
@@ -257,12 +257,12 @@ Geben Sie bitte den Vor- und Zunamen des neuen Benuters ein" 18 80 4 \
 
     # Pruefen, ob der Benutzer bereits existiert -- 2 Runden
     # 1te Pruefung
-    if [[ $(ldapsearch -h $ldaphost -b "$basedn" -D "$binddn" -w "$mastersecret" "(uid=$loginname)"| grep "numEntries"| tr -d " "|cut -d ":" -f2) == "1" ]]; then
+    if [[ `ldapsearch -h $ldaphost -b "$basedn" -D "$binddn" -w "$mastersecret" "(uid=$loginname)"| grep "numEntries"| tr -d " "|cut -d ":" -f2` == "1" ]]; then
 	# Wenn der einfache Loginname bereits existiert, wird dieser verlaengert.
 	loginname=`createlogin2 "$noumllowergn" "$noumllowersn"`
     fi
     # 2te Pruefung
-    if [[ $(ldapsearch -h $ldaphost -b "$basedn" -D "$binddn" -w "$mastersecret" "(uid=$loginname)"| grep "numEntries"| tr -d " "|cut -d ":" -f2) == "1" ]]; then
+    if [[ `ldapsearch -h $ldaphost -b "$basedn" -D "$binddn" -w "$mastersecret" "(uid=$loginname)"| grep "numEntries"| tr -d " "|cut -d ":" -f2` == "1" ]]; then
 	echo "Es kann kein eindeutiger Benutzername erzeugt werden."
 	exit
     fi
@@ -321,7 +321,7 @@ Geben Sie bitte die vollständige Bezeichnung der Ressource ein.\n Bei Fahrzeuge
     email="$loginname@$domain"
 
     # Pruefen, ob der Benutzer bereits existiert
-    if [[ $(ldapsearch -h $ldaphost -b "$basedn" -D "$binddn" -w "$mastersecret" "(uid=$loginname)"| grep "numEntries"| tr -d " "|cut -d ":" -f2) == "1" ]]; then
+    if [[ `ldapsearch -h $ldaphost -b "$basedn" -D "$binddn" -w "$mastersecret" "(uid=$loginname)"| grep "numEntries"| tr -d " "|cut -d ":" -f2` == "1" ]]; then
 	echo "Der Benutzername ist bereits vergeben."
 	
     fi

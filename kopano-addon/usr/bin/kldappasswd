@@ -22,7 +22,7 @@ usage() {
     echo "----------------------------------------------------------"
     echo "Übergeben Sie diesem Script den usernamen des neuen Kunden";
     echo
-    echo "Beispiel: \$> zldappasswd username"
+    echo "Beispiel: \$> kldappasswd username"
     echo "----------------------------------------------------------"
 }
 
@@ -40,15 +40,20 @@ fi
 user="$1"
 
 # DN und vollen Namen des Benutzers ermitteln
-userdn=$(ldapsearch -h $ldaphost -b "$basedn" -s subtree -D "$binddn" -w "$mastersecret" "(uid=$user)"|grep "dn: "|cut -d " " -f2)
+userdn=`ldapsearch -h $ldaphost -b "$basedn" -s subtree -D "$binddn" -w "$mastersecret" "(uid=$user)"|grep "dn: "|cut -d " " -f2`
 if [[ -z $userdn ]];then
     echo "Der Benutzer \"$user\" existiert nicht."
     exit
 fi
-fullname=$(ldapsearch -h $ldaphost -b "$basedn" -s subtree -D "$binddn" -w "$mastersecret" "(uid=$user)"|grep "cn: "|cut -d " " -f2-)
+fullname=`ldapsearch -h $ldaphost -b "$basedn" -s subtree -D "$binddn" -w "$mastersecret" "(uid=$user)"|grep "cn:"|cut -d " " -f2-`
+
+# ggf. base64 decodieren
+if [[ `echo $fullname| grep "==$"` ]];then
+    fullname=`echo $fullname | base64 --decode`
+fi
 
 # Passwort erzeugen
-password=$(pwgen -cn 8 1)
+password=$(pwgen -sBn 8 1)
 
 # Passwort aendern
 ldappasswd -h localhost -D "$binddn" -w $mastersecret -s $password $userdn
