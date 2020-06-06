@@ -4,3 +4,20 @@ Die LDIF-Vorlagen sind Multi-Tenant faehig
 Verzeichnis-Wurzel und erste Firma
     01_initial.ldif
 
+Benutzerknoten
+    02_users.ldif
+
+Sicherheitsgruppe
+    03_secgroups.ldif
+
+Hinweis: Je nach LDAP Client wird die Gruppenzuordnung eines Benutzers
+über das Attribut member oder das Attribut memberUID ermittelt.
+
+Beide Attribute funktionieren vollkommen unterschiedlich. Während 
+member den vollständigen DN eines Benutzers enthält und somit inner-
+halb des Verzeichnisbaums eine Art Link vom Gruppenknoten zu den 
+Benutzerknoten der Mitglieder enhält, beinhaltet memberUID lediglich
+die Benutzernamen der Mitglieder.
+
+Um sicher zu gehen, dass die Gruppenzuordnung immer funktioniert,
+setzen wir beide Attribute.

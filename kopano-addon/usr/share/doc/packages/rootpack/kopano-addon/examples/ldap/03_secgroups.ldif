@@ -13,6 +13,8 @@ cn: gruppe1
 member: uid=user1,ou=Benutzerverwaltung,ou=firma1,o=organisation,c=de
 member: uid=user2,ou=Benutzerverwaltung,ou=firma1,o=organisation,c=de
 member: uid=user3,ou=Benutzerverwaltung,ou=firma1,o=organisation,c=de
-description: Gruppe Buchhaltung
+memberUID: user1
+memberUID: user2
+memberUID: user3
+description: Gruppe Gruppe1
 kopanoSecurityGroup: 1
-

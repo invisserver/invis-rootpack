@@ -5,5 +5,5 @@ bind = yes
 bind_dn = cn=manager,o=organisation,c=de
 bind_pw = manager-secret
 scope = sub
-query_filter = (&(objectclass=kopano-user)(uid=%u))
+query_filter = (&(objectClass=posixAccount)(uid=%s))
 result_attribute = mail
