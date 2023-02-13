@@ -134,7 +134,9 @@ if [[ -n `a2enmod -l | grep suexec` ]]; then
     changevalues $path $file "$strings"
 else
     chown -R $vhuser.www $vhostdir/$fqdn 
-    find $vhostdir/$fqdn/ -type d -exec chmod 4775 '{}' \;
+    find $vhostdir/$fqdn/ -type d -exec chmod 2775 '{}' \;
+    setfacl -Rm d:user:wwwrun:rwx $vhostdir/$fqdn/htdocs/
+    setfacl -Rm user:wwwrun:rwx $vhostdir/$fqdn/htdocs/
 fi
     
 # Apache neu laden

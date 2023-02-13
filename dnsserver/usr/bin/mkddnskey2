@@ -1,0 +1,110 @@
+#!/bin/bash
+# Script zum Erzeugen eines DNSSEC-Schluesselpaares.
+# Der Schluessel-String wird automatisch an 
+# /etc/named.keys angehaengt
+# Version: 0.2
+# (C) 2011 Stefan Schaefer -- invis-server.org
+# Author: Stefan Schaefer <stefan@invis-server.org>
+# Questions: http://forum.invis-server.org
+# License: GPLv3
+
+# Globale Einstellungen
+rootpackdir="/etc/rootpack"
+rootpackconfig="$rootpackdir/rootpack.cfg"
+target="/etc/named.keys"
+whitelistfile="/etc/named.d/whitelist.names"
+
+# Bildschirm putzen
+clear
+
+usage() {
+    echo -e "Übergeben Sie diesem Script den Pfad den zugehörigen FQDN\ndes DDNS-Partners sowie den Besitzernamen der Domain.";
+    echo -e "Beispiel: \$> mkddnskey homeserver.example.com kunde"
+}
+
+# Konfigurationsparameter tauschen
+changevalues() {
+    # Arg1 = Pfad, Arg2 = Datei, Arg3 = sed String
+    cat $1/$2|sed "s%$3%g" > $1/$2.new
+    mv $1/$2.new $1/$2
+}
+
+getconfvalue() {
+    cat $rootpackconfig | grep "$1:" | cut -d ":" -f 2
+}
+
+## Wurden alle Parameter uebergeben?
+
+if [[ -z $1 || -z $2 ]]; then
+    usage
+    exit
+else
+    fqdn=$1
+    customer=$2
+fi
+
+## Pruefen, ob die genannte Domain lokal auf diesem DNS-Server gefuert wird
+domain=$(echo $fqdn | cut -d "." -f 2-)
+echo $domain
+
+if [[ ! $(dig @localhost $domain NS +short |grep `hostname -f`) ]]; then
+    echo "Die Domain des genannten Hosts wird nicht auf diesem Nameserver geführt."
+#    exit
+fi
+
+## Pruefen, ob die genannte Domain dem Kunden gehoert
+if [[ ! $(cat $rootpackdir/kunden/$customer-* |grep "^$domain$") ]]; then
+    echo -e "Achtung die Domain $domain gehört nicht dem genannten Kunden.\n"
+
+    until [[ $yesno =~ [j,n] ]]; do
+	read -p "Soll trotzdem fortgefahren werden? [j/n]: " yesno
+    done
+    
+    if [[ $yesno == "n" ]]; then
+	exit
+    fi
+fi
+
+## Schluesseldateien erzeugen
+#custhomepath=$(getent passwd|grep -e "^$customer:"|cut -d ":" -f6)
+#pathtofiles="$rootpackdir/kunden/ddns_keyfiles/$customer"
+
+# Schluesselverzeichnis anlegen, wenn nicht vorhanden
+#if [[ ! -d $pathtofiles ]]; then
+#    #echo $pathtofiles
+#    mkdir -p $pathtofiles
+#fi
+
+# Testen, ob der Schluessel bereits existiert.
+exists=$(cat $target|grep $fqdn)
+
+# Pruefen, ob es bereits Schluessel fuer diesen Host gibt.
+if [[ -n $exists ]]; then
+    echo "DNSSec-Schlüssel für den Host $fqdn existieren bereits."
+    exit
+fi
+
+## Schluesseldateien erzeugen
+pathtofiles="$rootpackdir/kunden/ddns_keyfiles/$customer"
+
+# Schluesselverzeichnis anlegen, wenn nicht vorhanden
+if [[ ! -d $pathtofiles ]]; then
+    #echo $pathtofiles
+    mkdir -p $pathtofiles
+fi
+
+# Kommentar-String aus Kundendatei extrahieren
+comment=$(cat $rootpackdir/kunden/$customer-*.info |grep "Name:"|tr -d "\t" |cut -d ":" -f2)
+echo -e "\n# $comment" >> $target
+
+# Schluessel-Dateien erzeugen und in named.keys eintragen
+cp $target $target.bak
+ddns-confgen -q -a hmac-sha256 -k $fqdn -s $fqdn. | tee "$pathtofiles/$fqdn.key" >> $target
+
+# Hostnamen in Whitelist fuer DNS Abfragen eintragen
+if [[ ! $(cat $whitelistfile | grep $fqdn) ]]; then
+    echo $fqdn >> $whitelistfile
+fi
+
+# Ausgabe
+echo -e "Der Schlüssel wurde in \"$target\" eingetragen.\n\nDie zugehörige Zone muss von Hand angepasst werden."
